@@ -72,7 +72,7 @@ extern "C" { // __ffi_strip
 #define tb_key_i(i) 0xffff - (i)
 /* Terminal-dependent key constants (tb_event.key) and terminfo capabilities */
 /* BEGIN codegen h */
-/* Produced by ./codegen.sh on Sun, 29 Aug 2021 05:00:08 +0000 */
+/* Produced by ./codegen.sh on Sun, 19 Sep 2021 01:02:02 +0000 */
 #define TB_KEY_F1 (0xffff - 0)
 #define TB_KEY_F2 (0xffff - 1)
 #define TB_KEY_F3 (0xffff - 2)
@@ -95,12 +95,13 @@ extern "C" { // __ffi_strip
 #define TB_KEY_ARROW_DOWN (0xffff - 19)
 #define TB_KEY_ARROW_LEFT (0xffff - 20)
 #define TB_KEY_ARROW_RIGHT (0xffff - 21)
-#define TB_KEY_MOUSE_LEFT (0xffff - 22)
-#define TB_KEY_MOUSE_RIGHT (0xffff - 23)
-#define TB_KEY_MOUSE_MIDDLE (0xffff - 24)
-#define TB_KEY_MOUSE_RELEASE (0xffff - 25)
-#define TB_KEY_MOUSE_WHEEL_UP (0xffff - 26)
-#define TB_KEY_MOUSE_WHEEL_DOWN (0xffff - 27)
+#define TB_KEY_BACK_TAB (0xffff - 22)
+#define TB_KEY_MOUSE_LEFT (0xffff - 23)
+#define TB_KEY_MOUSE_RIGHT (0xffff - 24)
+#define TB_KEY_MOUSE_MIDDLE (0xffff - 25)
+#define TB_KEY_MOUSE_RELEASE (0xffff - 26)
+#define TB_KEY_MOUSE_WHEEL_UP (0xffff - 27)
+#define TB_KEY_MOUSE_WHEEL_DOWN (0xffff - 28)
 
 #define TB_CAP_F1 0
 #define TB_CAP_F2 1
@@ -124,21 +125,22 @@ extern "C" { // __ffi_strip
 #define TB_CAP_ARROW_DOWN 19
 #define TB_CAP_ARROW_LEFT 20
 #define TB_CAP_ARROW_RIGHT 21
-#define TB_CAP__COUNT_KEYS 22
-#define TB_CAP_ENTER_CA 22
-#define TB_CAP_EXIT_CA 23
-#define TB_CAP_SHOW_CURSOR 24
-#define TB_CAP_HIDE_CURSOR 25
-#define TB_CAP_CLEAR_SCREEN 26
-#define TB_CAP_SGR0 27
-#define TB_CAP_UNDERLINE 28
-#define TB_CAP_BOLD 29
-#define TB_CAP_BLINK 30
-#define TB_CAP_ITALIC 31
-#define TB_CAP_REVERSE 32
-#define TB_CAP_ENTER_KEYPAD 33
-#define TB_CAP_EXIT_KEYPAD 34
-#define TB_CAP__COUNT 35
+#define TB_CAP_BACK_TAB 22
+#define TB_CAP__COUNT_KEYS 23
+#define TB_CAP_ENTER_CA 23
+#define TB_CAP_EXIT_CA 24
+#define TB_CAP_SHOW_CURSOR 25
+#define TB_CAP_HIDE_CURSOR 26
+#define TB_CAP_CLEAR_SCREEN 27
+#define TB_CAP_SGR0 28
+#define TB_CAP_UNDERLINE 29
+#define TB_CAP_BOLD 30
+#define TB_CAP_BLINK 31
+#define TB_CAP_ITALIC 32
+#define TB_CAP_REVERSE 33
+#define TB_CAP_ENTER_KEYPAD 34
+#define TB_CAP_EXIT_KEYPAD 35
+#define TB_CAP__COUNT 36
 /* END codegen h */
 
 /* Some hard-coded caps */
@@ -507,7 +509,7 @@ struct tb_global_t {
 struct tb_global_t global = {0};
 
 /* BEGIN codegen c */
-/* Produced by ./codegen.sh on Sun, 29 Aug 2021 05:00:08 +0000 */
+/* Produced by ./codegen.sh on Sun, 19 Sep 2021 01:02:03 +0000 */
 
 static const int16_t terminfo_cap_indexes[] = {
     66, // kf1 (TB_CAP_F1)
@@ -532,6 +534,7 @@ static const int16_t terminfo_cap_indexes[] = {
     61, // kcud1 (TB_CAP_ARROW_DOWN)
     79, // kcub1 (TB_CAP_ARROW_LEFT)
     83, // kcuf1 (TB_CAP_ARROW_RIGHT)
+    148, // kcbt (TB_CAP_BACK_TAB)
     28, // smcup (TB_CAP_ENTER_CA)
     40, // rmcup (TB_CAP_EXIT_CA)
     16, // cnorm (TB_CAP_SHOW_CURSOR)
@@ -571,6 +574,7 @@ static const char *xterm_caps[] = {
     "\033OB", // kcud1 (TB_CAP_ARROW_DOWN)
     "\033OD", // kcub1 (TB_CAP_ARROW_LEFT)
     "\033OC", // kcuf1 (TB_CAP_ARROW_RIGHT)
+    "\033[Z", // kcbt (TB_CAP_BACK_TAB)
     "\033[?1049h\033[22;0;0t", // smcup (TB_CAP_ENTER_CA)
     "\033[?1049l\033[23;0;0t", // rmcup (TB_CAP_EXIT_CA)
     "\033[?12l\033[?25h", // cnorm (TB_CAP_SHOW_CURSOR)
@@ -610,6 +614,7 @@ static const char *linux_caps[] = {
     "\033[B", // kcud1 (TB_CAP_ARROW_DOWN)
     "\033[D", // kcub1 (TB_CAP_ARROW_LEFT)
     "\033[C", // kcuf1 (TB_CAP_ARROW_RIGHT)
+    "\033[Z", // kcbt (TB_CAP_BACK_TAB)
     "", // smcup (TB_CAP_ENTER_CA)
     "", // rmcup (TB_CAP_EXIT_CA)
     "\033[?25h\033[?0c", // cnorm (TB_CAP_SHOW_CURSOR)
@@ -649,6 +654,7 @@ static const char *screen_caps[] = {
     "\033OB", // kcud1 (TB_CAP_ARROW_DOWN)
     "\033OD", // kcub1 (TB_CAP_ARROW_LEFT)
     "\033OC", // kcuf1 (TB_CAP_ARROW_RIGHT)
+    "\033[Z", // kcbt (TB_CAP_BACK_TAB)
     "\033[?1049h", // smcup (TB_CAP_ENTER_CA)
     "\033[?1049l", // rmcup (TB_CAP_EXIT_CA)
     "\033[34h\033[?25h", // cnorm (TB_CAP_SHOW_CURSOR)
@@ -688,6 +694,7 @@ static const char *rxvt_256color_caps[] = {
     "\033[B", // kcud1 (TB_CAP_ARROW_DOWN)
     "\033[D", // kcub1 (TB_CAP_ARROW_LEFT)
     "\033[C", // kcuf1 (TB_CAP_ARROW_RIGHT)
+    "\033[Z", // kcbt (TB_CAP_BACK_TAB)
     "\0337\033[?47h", // smcup (TB_CAP_ENTER_CA)
     "\033[2J\033[?47l\0338", // rmcup (TB_CAP_EXIT_CA)
     "\033[?25h", // cnorm (TB_CAP_SHOW_CURSOR)
@@ -727,6 +734,7 @@ static const char *rxvt_unicode_caps[] = {
     "\033[B", // kcud1 (TB_CAP_ARROW_DOWN)
     "\033[D", // kcub1 (TB_CAP_ARROW_LEFT)
     "\033[C", // kcuf1 (TB_CAP_ARROW_RIGHT)
+    "\033[Z", // kcbt (TB_CAP_BACK_TAB)
     "\033[?1049h", // smcup (TB_CAP_ENTER_CA)
     "\033[r\033[?1049l", // rmcup (TB_CAP_EXIT_CA)
     "\033[?12l\033[?25h", // cnorm (TB_CAP_SHOW_CURSOR)
@@ -766,6 +774,7 @@ static const char *eterm_caps[] = {
     "\033[B", // kcud1 (TB_CAP_ARROW_DOWN)
     "\033[D", // kcub1 (TB_CAP_ARROW_LEFT)
     "\033[C", // kcuf1 (TB_CAP_ARROW_RIGHT)
+    "", // kcbt (TB_CAP_BACK_TAB)
     "\0337\033[?47h", // smcup (TB_CAP_ENTER_CA)
     "\033[2J\033[?47l\0338", // rmcup (TB_CAP_EXIT_CA)
     "\033[?25h", // cnorm (TB_CAP_SHOW_CURSOR)

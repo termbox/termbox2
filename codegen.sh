@@ -33,6 +33,7 @@ read -r -d '' terminfo_keys <<'EOD'
     kcud1 ARROW_DOWN
     kcub1 ARROW_LEFT
     kcuf1 ARROW_RIGHT
+    kcbt  BACK_TAB
 EOD
 
 read -r -d '' terminfo_funcs <<'EOD'
