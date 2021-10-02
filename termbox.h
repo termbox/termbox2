@@ -23,6 +23,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/***
+ *      __                      ___.                ________
+ *    _/  |_  ___________  _____\_ |__   _______  __\_____  \
+ *    \   __\/ __ \_  __ \/     \| __ \ /  _ \  \/  //  ____/
+ *     |  | \  ___/|  | \/  Y Y  \ \_\ (  <_> >    </       \
+ *     |__|  \___  >__|  |__|_|  /___  /\____/__/\_ \_______ \
+ *               \/            \/    \/            \/       \/
+ */
+
 #ifndef __TERMBOX_H
 #define __TERMBOX_H
 
