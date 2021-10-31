@@ -438,8 +438,9 @@ int tb_peek_event(struct tb_event *event, int timeout);
  */
 int tb_poll_event(struct tb_event *event);
 
-/* Print and printf functions. Return number of cells printed to. */
+/* Print and printf functions. Return total width of printed characters. */
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str);
+/* Return TB_ERR if no characters were written. */
 int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...);
 
 /* Send raw bytes to terminal. */
@@ -1512,7 +1513,6 @@ int tb_poll_event(struct tb_event *event) {
 }
 
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
-    int rv;
     uint32_t uni;
     int w, ix = x;
     while (*str) {
@@ -1522,13 +1522,17 @@ int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
             w = 1;
         }
         if (w == 0 && x > ix) {
-            if_err_return(rv, tb_extend_cell(x - 1, y, uni));
+            if ((tb_extend_cell(x - 1, y, uni)) != TB_OK) {
+                break;
+            }
         } else {
-            if_err_return(rv, tb_set_cell(x, y, uni, fg, bg));
+            if ((tb_set_cell(x, y, uni, fg, bg)) != TB_OK) {
+                break;
+            }
         }
         x += w;
     }
-    return TB_OK;
+    return x - ix;
 }
 
 int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...) {
