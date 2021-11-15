@@ -1305,7 +1305,7 @@ int tb_init_fd(int ttyfd) {
 
 int tb_shutdown() {
     if_not_init_return();
-    tb_deinit();
+    tb_deinit(1);
     return TB_OK;
 }
 
@@ -1664,6 +1664,7 @@ static int tb_reset() {
 
 static int tb_init_rwfd(int rfd, int wfd) {
     int rv;
+    int caps_initialized = 0;
 
     tb_reset();
     global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
@@ -1673,6 +1674,7 @@ static int tb_init_rwfd(int rfd, int wfd) {
     do {
         if_err_break(rv, init_term_attrs());
         if_err_break(rv, init_term_caps());
+        caps_initialized = 1;
         if_err_break(rv, init_cap_trie());
         if_err_break(rv, init_resize_handler());
         if_err_break(rv, send_init_escape_codes());
@@ -1683,7 +1685,7 @@ static int tb_init_rwfd(int rfd, int wfd) {
     } while(0);
 
     if (rv != TB_OK) {
-        tb_deinit();
+        tb_deinit(caps_initialized);
     }
 
     return rv;
@@ -1945,12 +1947,15 @@ static int init_cellbuf() {
     return TB_OK;
 }
 
-static int tb_deinit() {
-    bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_CLEAR_SCREEN]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_CA]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_KEYPAD]);
+static int tb_deinit(int caps_initialized) {
+    if (caps_initialized) {
+        bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_CLEAR_SCREEN]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_CA]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_KEYPAD]);
+    }
+
     bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
     bytebuf_flush(&global.out, global.wfd);
     if (global.ttyfd >= 0) {
