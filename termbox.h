@@ -2218,7 +2218,11 @@ static int wait_event(struct tb_event *event, struct timeval *timeout) {
         int select_rv = select(maxfd + 1, &rfds, NULL, NULL, timeout);
 
         if (select_rv < 0) {
-            // Let EINTR/EAGAIN bubble up
+            if (errno == EINTR) {
+                continue;
+            }
+
+            // Let EAGAIN bubble up
             global.last_errno = errno;
             return TB_ERR_SELECT;
         } else if (select_rv == 0) {
