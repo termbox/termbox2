@@ -9,6 +9,7 @@ main() {
     local xterm_geom='80x24+0+0'
     local xterm_bg='grey3'
     local xterm_fg='grey93'
+    local single_test_name=${TERMBOX2_TEST_NAME:-}
     local main_ec=0
 
     check_deps
@@ -17,6 +18,13 @@ main() {
     for test_php in $(find . -type f -wholename '*/test_*/test.php'); do
         local test_dir=$(dirname $test_php)
         local test_name=$(basename $test_dir)
+
+        # check if we are running a specific test (TERMBOX2_TEST_NAME)
+        if [ -n "$single_test_name" -a "$single_test_name" != "$test_name" ]; then
+            continue
+        fi
+
+        # begin
         echo -e "\x1b[1m$test_name\x1b[0m: BEGIN"
 
         # make log file
@@ -78,7 +86,7 @@ main() {
 
         # take screencap
         # xwd -root -display $x_display -out $test_dir/observed.xwd # graphical
-        rm -f "$test_dir/observed.*"
+        rm -f $test_dir/observed.*
         DISPLAY=$x_display xvkbd -window xterm -text '\S\[Home]' &>/dev/null # ansi
         local test_log_xterm_count=$(ls -1 ${test_log_xterm}* 2>/dev/null | wc -l)
         [ "$test_log_xterm_count" -eq 1 ] && cp ${test_log_xterm}* $test_dir/observed.ansi
@@ -104,7 +112,7 @@ main() {
             cat $test_dir/observed.ansi 2>/dev/null | sed 's/^/  /'; echo -e '\x1b[0m'
 
             echo -e '\n  [xterm observed.ansi.b64]'
-            base64 $test_dir/observed.ansi | sed 's/^/  /'
+            base64 $test_dir/observed.ansi 2>/dev/null | sed 's/^/  /'
 
             if [ -s "$test_log_php" ]; then
                 echo -e '\n  [php log]'

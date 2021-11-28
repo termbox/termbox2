@@ -11,7 +11,7 @@ all: $(termbox_demos)
 $(termbox_demos): %: %.c
 	$(CC) -DTB_OPT_TRUECOLOR -DTB_OPT_EGC $(termbox_cflags) $^ -o $@
 
-$(termbox_o):
+$(termbox_o): $(termbox_h)
 	$(CC) -DTB_IMPL -DTB_OPT_TRUECOLOR -DTB_OPT_EGC -fPIC -xc -c $(termbox_cflags) $(termbox_h) -o $@
 
 $(termbox_so): $(termbox_o)
