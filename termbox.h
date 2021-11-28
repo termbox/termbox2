@@ -438,9 +438,13 @@ int tb_peek_event(struct tb_event *event, int timeout);
  */
 int tb_poll_event(struct tb_event *event);
 
-/* Print and printf functions. Return number of cells printed to. */
+/* Print and printf functions. Specify param 'out_w' to determine width of
+ * printed string.
+ */
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str);
 int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...);
+int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w, const char *str);
+int tb_printf_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w, const char *fmt, ...);
 
 /* Send raw bytes to terminal. */
 int tb_send(const char *buf, size_t nbuf);
@@ -1232,6 +1236,7 @@ static const unsigned char utf8_mask[6] = {0x7f, 0x1f, 0x0f, 0x07, 0x03, 0x01};
 
 static int tb_reset();
 static int tb_init_rwfd(int rfd, int wfd);
+static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w, const char *fmt, va_list vl);
 static int init_term_attrs();
 static int init_term_caps();
 static int init_cap_trie();
@@ -1512,9 +1517,16 @@ int tb_poll_event(struct tb_event *event) {
 }
 
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
+    return tb_print_ex(x, y, fg, bg, NULL, str);
+}
+
+int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w, const char *str) {
     int rv;
     uint32_t uni;
     int w, ix = x;
+    if (out_w) {
+        *out_w = 0;
+    }
     while (*str) {
         str += tb_utf8_char_to_unicode(&uni, str);
         w = wcwidth(uni);
@@ -1527,21 +1539,29 @@ int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
             if_err_return(rv, tb_set_cell(x, y, uni, fg, bg));
         }
         x += w;
+        if (out_w) {
+            *out_w += w;
+        }
     }
     return TB_OK;
 }
 
 int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...) {
     int rv;
-    char buf[TB_OPT_PRINTF_BUF];
     va_list vl;
     va_start(vl, fmt);
-    rv = vsnprintf(buf, sizeof(buf), fmt, vl);
+    rv = tb_printf_inner(x, y, fg, bg, NULL, fmt, vl);
     va_end(vl);
-    if (rv < 0 || rv >= (int)sizeof(buf)) {
-        return TB_ERR;
-    }
-    return tb_print(x, y, fg, bg, buf);
+    return rv;
+}
+
+int tb_printf_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w, const char *fmt, ...) {
+    int rv;
+    va_list vl;
+    va_start(vl, fmt);
+    rv = tb_printf_inner(x, y, fg, bg, out_w, fmt, vl);
+    va_end(vl);
+    return rv;
 }
 
 int tb_send(const char *buf, size_t nbuf) {
@@ -1713,6 +1733,16 @@ static int init_term_attrs() {
     }
 
     return TB_OK;
+}
+
+int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w, const char *fmt, va_list vl) {
+    int rv;
+    char buf[TB_OPT_PRINTF_BUF];
+    rv = vsnprintf(buf, sizeof(buf), fmt, vl);
+    if (rv < 0 || rv >= (int)sizeof(buf)) {
+        return TB_ERR;
+    }
+    return tb_print_ex(x, y, fg, bg, out_w, buf);
 }
 
 static int init_term_caps() {
