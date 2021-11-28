@@ -1976,13 +1976,15 @@ static int init_cellbuf() {
 }
 
 static int tb_deinit() {
-    bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_CLEAR_SCREEN]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_CA]);
-    bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_KEYPAD]);
-    bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
-    bytebuf_flush(&global.out, global.wfd);
+    if (global.caps[0] != NULL && global.wfd >= 0) {
+        bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_CLEAR_SCREEN]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_CA]);
+        bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_KEYPAD]);
+        bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
+        bytebuf_flush(&global.out, global.wfd);
+    }
     if (global.ttyfd >= 0) {
         if (global.has_orig_tios) {
             tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
