@@ -11,6 +11,8 @@ main() {
     local xterm_fg='grey93'
     local main_ec=0
 
+    check_deps
+
     # loop through each 'test_*' dir
     for test_php in $(find . -type f -wholename '*/test_*/test.php'); do
         local test_dir=$(dirname $test_php)
@@ -121,6 +123,15 @@ main() {
     done
 
     return $main_ec
+}
+
+check_deps() {
+    for dep in Xvfb xterm xvkbd; do
+        if ! command -v $dep &>/dev/null; then
+            echo "Missing dependency: $dep"
+            exit 1
+        fi
+    done
 }
 
 main
