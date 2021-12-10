@@ -327,8 +327,8 @@ struct tb_event {
 };
 
 /* Initializes the termbox library. This function should be called before any
- * other functions. Function tb_init() is same as tb_init_file("/dev/tty").
- * After successful initialization, the library must be finalized using the
+ * other functions. tb_init() is equivalent to tb_init_file("/dev/tty"). After
+ * successful initialization, the library must be finalized using the
  * tb_shutdown() function.
  */
 int tb_init();
@@ -336,9 +336,9 @@ int tb_init_file(const char *path);
 int tb_init_fd(int ttyfd);
 int tb_shutdown();
 
-/* Returns the size of the internal back buffer (which is the same as
- * terminal's window size in characters). The internal buffer can be resized
- * after tb_clear() or tb_present() function calls. Both dimensions have an
+/* Returns the size of the internal back buffer (which is the same as terminal's
+ * window size in rows and columns). The internal buffer can be resized after
+ * tb_clear() or tb_present() function calls. Both dimensions have an
  * unspecified negative value when called before tb_init() or after
  * tb_shutdown().
  */
@@ -351,7 +351,7 @@ int tb_height();
 int tb_clear();
 int tb_set_clear_attrs(uintattr_t fg, uintattr_t bg);
 
-/* Synchronizes the internal back buffer with the terminal. */
+/* Synchronizes the internal back buffer with the terminal by writing to tty. */
 int tb_present();
 
 /* Sets the position of the cursor. Upper-left character is (0, 0). */
@@ -368,13 +368,13 @@ int tb_set_cell(int x, int y, uint32_t ch, uintattr_t fg, uintattr_t bg);
 int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg, uintattr_t bg);
 int tb_extend_cell(int x, int y, uint32_t ch);
 
-/* Sets the termbox input mode. Termbox has two input modes:
- * 1. Esc input mode.
- *    When ESC sequence is in the buffer and it doesn't match any known
- *    ESC sequence => ESC means TB_KEY_ESC.
- * 2. Alt input mode.
- *    When ESC sequence is in the buffer and it doesn't match any known
- *    sequence => ESC enables TB_MOD_ALT modifier for the next keyboard event.
+/* Sets the input mode. Termbox has two input modes:
+ * 1. TB_INPUT_ESC
+ *    When escape (\x1b) is in the buffer and there's no match for an escape
+ *    sequence, a key event for TB_KEY_ESC is returned.
+ * 2. TB_INPUT_ALT
+ *    When escape (\x1b) is in the buffer and there's no match for an escape
+ *    sequence, the next keyboard event is returned with a TB_MOD_ALT modifier.
  *
  * You can also apply TB_INPUT_MOUSE via bitwise OR operation to either of the
  * modes (e.g. TB_INPUT_ESC | TB_INPUT_MOUSE). If none of the main two modes
@@ -382,64 +382,62 @@ int tb_extend_cell(int x, int y, uint32_t ch);
  * reason you've decided to use (TB_INPUT_ESC | TB_INPUT_ALT) combination, it
  * will behave as if only TB_INPUT_ESC was selected.
  *
- * If 'mode' is TB_INPUT_CURRENT, it returns the current input mode.
+ * If mode is TB_INPUT_CURRENT, the function returns the current input mode.
  *
- * Default termbox input mode is TB_INPUT_ESC.
+ * The default input mode is TB_INPUT_ESC.
  */
 int tb_set_input_mode(int mode);
 
-/* Sets the termbox output mode. Termbox has three output options:
+/* Sets the termbox output mode. Termbox has three output modes:
  * 1. TB_OUTPUT_NORMAL     => [1..8]
  *    This mode provides 8 different colors:
- *      black, red, green, yellow, blue, magenta, cyan, white
- *    Shortcut: TB_BLACK, TB_RED, ...
- *    Attributes: TB_BOLD, TB_UNDERLINE, TB_REVERSE
+ *      TB_BLACK, TB_RED, TB_GREEN, TB_YELLOW,
+ *      TB_BLUE, TB_MAGENTA, TB_CYAN, TB_WHITE
+ *    Colors may be bitwise OR'd with attributes:
+ *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC
  *
  *    Example usage:
- *        tb_set_cell(x, y, '@', TB_BLACK | TB_BOLD, TB_RED);
+ *      tb_set_cell(x, y, '@', TB_BLACK | TB_BOLD, TB_RED);
  *
  * 2. TB_OUTPUT_256        => [0..256]
- *    In this mode you can leverage the 256 terminal mode:
- *    0x00 - 0x07: the 8 colors as in TB_OUTPUT_NORMAL
- *    0x08 - 0x0f: TB_* | TB_BOLD
- *    0x10 - 0xe7: 216 different colors
- *    0xe8 - 0xff: 24 different shades of grey
+ *    In this mode you get 256 distinct colors:
+ *      0x00 - 0x07: the 8 colors as in TB_OUTPUT_NORMAL
+ *      0x08 - 0x0f: TB_<color> | TB_BOLD
+ *      0x10 - 0xe7: 216 different colors
+ *      0xe8 - 0xff: 24 different shades of grey
  *
  *    Example usage:
- *        tb_set_cell(x, y, '@', 184, 240);
- *        tb_set_cell(x, y, '@', 0xb8, 0xf0);
+ *      tb_set_cell(x, y, '@', 184, 240);
+ *      tb_set_cell(x, y, '@', 0xb8, 0xf0);
  *
  * 3. TB_OUTPUT_216        => [0..216]
- *    This mode supports the 3rd range of the 256 mode only.
- *    But you don't need to provide an offset.
+ *    This mode supports the 3rd range of TB_OUTPUT_256 only, but you don't need
+ *    to provide an offset.
  *
  * 4. TB_OUTPUT_GRAYSCALE  => [0..23]
- *    This mode supports the 4th range of the 256 mode only.
- *    But you dont need to provide an offset.
+ *    This mode supports the 4th range of TB_OUTPUT_256 only, but you dont need
+ *    to provide an offset.
  *
- * Execute demo/output to see its impact on your terminal.
+ * If mode is TB_OUTPUT_CURRENT, the function returns the current output mode.
  *
- * If 'mode' is TB_OUTPUT_CURRENT, it returns the current output mode.
- *
- * Default termbox output mode is TB_OUTPUT_NORMAL.
+ * The default output mode is TB_OUTPUT_NORMAL.
  */
 int tb_set_output_mode(int mode);
 
-/* Wait for an event up to 'timeout' milliseconds and fill the 'event'
- * structure with it, when the event is available. Returns the type of the
- * event (one of TB_EVENT_* constants) or -1 if there was an error or 0 in case
- * there were no event during 'timeout' period.
+/* Wait for an event up to timeout_ms milliseconds and fill the event structure
+ * with it. If no event is available within the timeout period, TB_ERR_NO_EVENT
+ * is returned. On a resize event, the underlying select(2) call may be
+ * interrupted, yielding a return code of TB_ERR_SELECT. In this case, you may
+ * check errno via tb_last_errno(). If it's EINTR, you can safely ignore that
+ * and call tb_peek_event() again.
  */
-int tb_peek_event(struct tb_event *event, int timeout);
+int tb_peek_event(struct tb_event *event, int timeout_ms);
 
-/* Wait for an event forever and fill the 'event' structure with it, when the
- * event is available. Returns the type of the event (one of TB_EVENT_*
- * constants) or -1 if there was an error.
- */
+/* Same as tb_peek_event except no timeout. */
 int tb_poll_event(struct tb_event *event);
 
-/* Print and printf functions. Specify param 'out_w' to determine width of
- * printed string.
+/* Print and printf functions. Specify param out_w to determine width of printed
+ * string.
  */
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str);
 int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...);
@@ -452,6 +450,14 @@ int tb_sendf(const char *fmt, ...);
 
 /* Set custom functions. fn_type is one of TB_FUNC_* constants, fn is a
  * compatible function pointer, or NULL to clear.
+ *
+ * TB_FUNC_EXTRACT_PRE:
+ *   If specified, invoke this function BEFORE termbox tries to extract any
+ *   escape sequences from the input buffer.
+ *
+ * TB_FUNC_EXTRACT_POST:
+ *   If specified, invoke this function AFTER termbox tries (and fails) to
+ *   extract any escape sequences from the input buffer.
  */
 int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *));
 
