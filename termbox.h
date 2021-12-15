@@ -1787,7 +1787,7 @@ static int init_cap_trie() {
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
     struct cap_trie_t *next, *node = &global.cap_trie;
     size_t i, j;
-    for (i = 0; i < strlen(cap); i++) {
+    for (i = 0; cap[i] != '\0'; i++) {
         char c = cap[i];
         next = NULL;
 
@@ -1830,7 +1830,7 @@ static int cap_trie_find(const char *buf, struct cap_trie_t **last, size_t *dept
     size_t i, j;
     *last = node;
     *depth = 0;
-    for (i = 0; i < strlen(buf); i++) {
+    for (i = 0; buf[i] != '\0'; i++) {
         char c = buf[i];
         next = NULL;
 
