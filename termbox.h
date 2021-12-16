@@ -2517,8 +2517,8 @@ static int extract_esc_mouse(struct tb_event *event) {
             ret = TB_ERR_NEED_MORE;
             buf_shift = 0;
         } else {
-            int is_extended = (in->buf[2] == '<');
-            int start = (is_extended ? 3 : 2);
+            int is_extended = (in->buf[2] != '<');
+            int start = (is_extended ? 2 : 3);
 
             int n1 = strtoul(&in->buf[start], NULL, 10);
             int n2 = strtoul(&in->buf[indices[FIRST_SEMICOLON] + 1], NULL, 10);
