@@ -2435,7 +2435,6 @@ static int extract_esc_mouse(struct tb_event *event) {
 
     if (type == TYPE_MAX) {
         ret = TB_ERR; /* No match */
-        bytebuf_shift(in, in->len);
         return ret;
     }
 
@@ -2515,8 +2514,7 @@ static int extract_esc_mouse(struct tb_event *event) {
         if (indices[FIRST_M] == index_fail
             || indices[FIRST_SEMICOLON] == index_fail
             || indices[LAST_SEMICOLON] == index_fail) {
-            ret = TB_ERR_NEED_MORE;
-            buf_shift = 0;
+            ret = TB_ERR;
         } else {
             int is_extended = (in->buf[2] != '<');
             int start = (is_extended ? 2 : 3);
