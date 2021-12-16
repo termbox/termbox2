@@ -2434,14 +2434,16 @@ static int extract_esc_mouse(struct tb_event *event) {
 	}
 
 	if (type == TYPE_MAX) {
-		return ret; /* No match */
+		ret = TB_ERR_NEED_MORE; /* No match */
+		return ret;
 	}
 
-	event->type = TB_EVENT_MOUSE;
+	size_t buf_shift = 0;
 
 	switch (type) {
-	case TYPE_VT200: {
-		int b = in->buf[3] - ' ';
+	case TYPE_VT200:
+	if (in->len >= 6) {
+		int b = in->buf[3] - 0x20;
 		int fail = 0;
 
 		switch (b & 3) {
@@ -2460,7 +2462,7 @@ static int extract_esc_mouse(struct tb_event *event) {
 			event->key = TB_KEY_MOUSE_RELEASE;
 			break;
 		default:
-			ret = TB_ERR_NEED_MORE; // -6;
+			ret = TB_ERR;
 			fail = 1;
 			break;
 		}
@@ -2471,11 +2473,13 @@ static int extract_esc_mouse(struct tb_event *event) {
 			}
 
 			// the coord is 1,1 for upper left
-			event->x = ((uint8_t) in->buf[4]) - 1 - ' ';
-			event->y = ((uint8_t) in->buf[5]) - 1 - ' ';
+			event->x = ((uint8_t) in->buf[4]) - 0x21;
+			event->y = ((uint8_t) in->buf[5]) - 0x21;
 
-			ret = TB_OK; // 6
+			ret = TB_OK;
 		}
+
+		buf_shift = 6;
 	}
 		break;
 	case TYPE_1006: /* FALLTHROUGH */
@@ -2510,17 +2514,18 @@ static int extract_esc_mouse(struct tb_event *event) {
 		if (indices[FIRST_M] == index_fail
 			|| indices[FIRST_SEMICOLON] == index_fail
 			|| indices[LAST_SEMICOLON] == index_fail) {
-			ret = 0; // WHAT
+			ret = TB_ERR_NEED_MORE;
+			buf_shift = 0;
 		} else {
 			int is_extended = (in->buf[2] == '<');
-			int starti = (is_extended ? 3 : 2);
+			int start = (is_extended ? 3 : 2);
 
-			int n1 = strtoul(&in->buf[starti], NULL, 10);
+			int n1 = strtoul(&in->buf[start], NULL, 10);
 			int n2 = strtoul(&in->buf[indices[FIRST_SEMICOLON] + 1], NULL, 10);
 			int n3 = strtoul(&in->buf[indices[LAST_SEMICOLON] + 1], NULL, 10);
 
 			if (is_extended) {
-				n1 -= ' ';
+				n1 -= 0x20;
 			}
 
 			int fail = 0;
@@ -2543,8 +2548,6 @@ static int extract_esc_mouse(struct tb_event *event) {
 				break;
 			}
 
-			ret = indices[FIRST_M] + 1; // WHAT
-
 			if (!fail) {
 				if (!m_is_capital) {
 					// on xterm mouse release is signaled by lowercase m
@@ -2559,11 +2562,16 @@ static int extract_esc_mouse(struct tb_event *event) {
 				event->y = ((uint8_t) n3) - 1;
 
 				ret = TB_OK;
+				buf_shift = in->len;
+			} else {
+				buf_shift = indices[FIRST_M] + 1;
 			}
 		}
 	}
 		break;
 	}
+
+	bytebuf_shift(in, buf_shift);
 
 	if (ret == TB_OK) {
 		event->type = TB_EVENT_MOUSE;
