@@ -2401,166 +2401,175 @@ static int extract_esc_cap(struct tb_event *event) {
 }
 
 static int extract_esc_mouse(struct tb_event *event) {
-    (void)event;
-    // TODO mouse escape sequence parsing
-    return TB_ERR;
+	struct bytebuf_t *in = &global.in;
 
-    /*
-    struct bytebuf_t *in = &global.in;
-    char *c = in->buf;
+	enum type {
+		TYPE_VT200 = 0,
+		TYPE_1006,
+		TYPE_1015,
+		TYPE_MAX
+	};
 
-    int is_vt200 = (in->len >= 3 && strncmp("\x1b[M", in->buf, 3) == 0) ? 1 : 0;
-    int is_1006 = (in->len >= 3 && strncmp("\x1b[<", in->buf, 3) == 0) ? 1 : 0;
-    int is_1015 = (in->len >= 2 && in->buf[1] == '[') ? 1 : 0;
+	char *cmp[TYPE_MAX] = {
+		// X10 mouse encoding, the simplest one
+		// \x1b [ M Cb Cx Cy
+		[TYPE_VT200] = "\x1b[M",
+		// xterm 1006 extended mode or urxvt 1015 extended mode
+		// xterm: \x1b [ < Cb ; Cx ; Cy (M or m)
+		[TYPE_1006] = "\x1b[<",
+		// urxvt: \x1b [ Cb ; Cx ; Cy M
+		[TYPE_1015] = "\x1b["
+	};
 
+	enum type type = 0;
+	int ret = TB_ERR;
 
-    if (is_vt200 && in->len >= 6) {
-        // VT200 mode
-        uint8_t b = c[3], x = c[4], y = c[5];
-        b -= 0x20;
-        event->type = TB_EVENT_MOUSE;
-        event->key = TB_KEY_MOUSE_LEFT;
-        event->x = x - 0x21;
-        event->y = y - 0x21;
-        if (b & 0x20) {
-            event->mod |= TB_MOD_MOTION;
-        }
-        bytebuf_shift(in, 6);
-        return TB_OK;
-    }
+	/* Unrolled at compile-time (probably) */
+	for (; type < TYPE_MAX; type++) {
+		size_t size = strlen(cmp[type]);
 
+		if (in->len >= size && (strncmp(cmp[type], in->buf, size)) == 0) {
+			break;
+		}
+	}
 
+	if (type == TYPE_MAX) {
+		return ret; /* No match */
+	}
 
-    if (is_vt200) {
-        return TB_ERR_NEED_MORE;
-    }
+	event->type = TB_EVENT_MOUSE;
 
-    return TB_ERR;
+	switch (type) {
+	case TYPE_VT200: {
+		int b = in->buf[3] - ' ';
+		int fail = 0;
 
-    if (len >= 6 && starts_with(buf, len, "\x1b[M")) {
-        // X10 mouse encoding, the simplest one
-        // \x1b [ M Cb Cx Cy
-        int b = buf[3] - 32;
-        switch (b & 3) {
-        case 0:
-            if ((b & 64) != 0)
-                event->key = TB_KEY_MOUSE_WHEEL_UP;
-            else
-                event->key = TB_KEY_MOUSE_LEFT;
-            break;
-        case 1:
-            if ((b & 64) != 0)
-                event->key = TB_KEY_MOUSE_WHEEL_DOWN;
-            else
-                event->key = TB_KEY_MOUSE_MIDDLE;
-            break;
-        case 2:
-            event->key = TB_KEY_MOUSE_RIGHT;
-            break;
-        case 3:
-            event->key = TB_KEY_MOUSE_RELEASE;
-            break;
-        default:
-            return -6;
-        }
-        event->type = TB_EVENT_MOUSE; // TB_EVENT_KEY by default
-        if ((b & 32) != 0)
-            event->mod |= TB_MOD_MOTION;
+		switch (b & 3) {
+		case 0:
+			event->key = ((b & 64) != 0) ?
+				TB_KEY_MOUSE_WHEEL_UP : TB_KEY_MOUSE_LEFT;
+			break;
+		case 1:
+			event->key = ((b & 64) != 0) ?
+				TB_KEY_MOUSE_WHEEL_DOWN : TB_KEY_MOUSE_MIDDLE;
+			break;
+		case 2:
+			event->key = TB_KEY_MOUSE_RIGHT;
+			break;
+		case 3:
+			event->key = TB_KEY_MOUSE_RELEASE;
+			break;
+		default:
+			ret = TB_ERR_NEED_MORE; // -6;
+			fail = 1;
+			break;
+		}
 
-        // the coord is 1,1 for upper left
-        event->x = (uint8_t)buf[4] - 1 - 32;
-        event->y = (uint8_t)buf[5] - 1 - 32;
+		if (!fail) {
+			if ((b & 32) != 0) {
+				event->mod |= TB_MOD_MOTION;
+			}
 
-        return 6;
-    } else if (starts_with(buf, len, "\x1b[<") ||
-               starts_with(buf, len, "\x1b[")) {
-        // xterm 1006 extended mode or urxvt 1015 extended mode
-        // xterm: \x1b [ < Cb ; Cx ; Cy (M or m)
-        // urxvt: \x1b [ Cb ; Cx ; Cy M
-        int i, mi = -1, starti = -1;
-        int isM, isU, s1 = -1, s2 = -1;
-        int n1 = 0, n2 = 0, n3 = 0;
+			// the coord is 1,1 for upper left
+			event->x = ((uint8_t) in->buf[4]) - 1 - ' ';
+			event->y = ((uint8_t) in->buf[5]) - 1 - ' ';
 
-        for (i = 0; i < len; i++) {
-            // We search the first (s1) and the last (s2) ';'
-            if (buf[i] == ';') {
-                if (s1 == -1)
-                    s1 = i;
-                s2 = i;
-            }
+			ret = TB_OK; // 6
+		}
+	}
+		break;
+	case TYPE_1006: /* FALLTHROUGH */
+	case TYPE_1015: {
+		size_t index_fail = (size_t) -1;
 
-            // We search for the first 'm' or 'M'
-            if ((buf[i] == 'm' || buf[i] == 'M') && mi == -1) {
-                mi = i;
-                break;
-            }
-        }
-        if (mi == -1)
-            return 0;
+		enum {
+			FIRST_M = 0,
+			FIRST_SEMICOLON,
+			LAST_SEMICOLON,
+			FIRST_LAST_MAX
+		};
 
-        // whether it's a capital M or not
-        isM = (buf[mi] == 'M');
+		size_t indices[FIRST_LAST_MAX] = {index_fail, index_fail, index_fail};
+		int m_is_capital = 0;
 
-        if (buf[2] == '<') {
-            isU = 0;
-            starti = 3;
-        } else {
-            isU = 1;
-            starti = 2;
-        }
+		for (size_t i = 0; i < in->len; i++) {
+			if (in->buf[i] == ';') {
+				if (indices[FIRST_SEMICOLON] == index_fail) {
+					indices[FIRST_SEMICOLON] = i;
+				} else {
+					indices[LAST_SEMICOLON] = i;
+				}
+			} else if (indices[FIRST_M] == index_fail) {
+				if (in->buf[i] == 'm' || in->buf[i] == 'M') {
+					m_is_capital = (in->buf[i] == 'M');
+					indices[FIRST_M] = i;
+				}
+			}
+		}
 
-        if (s1 == -1 || s2 == -1 || s1 == s2)
-            return 0;
+		if (indices[FIRST_M] == index_fail
+			|| indices[FIRST_SEMICOLON] == index_fail
+			|| indices[LAST_SEMICOLON] == index_fail) {
+			ret = 0; // WHAT
+		} else {
+			int is_extended = (in->buf[2] == '<');
+			int starti = (is_extended ? 3 : 2);
 
-        n1 = strtoul(&buf[starti], NULL, 10);
-        n2 = strtoul(&buf[s1 + 1], NULL, 10);
-        n3 = strtoul(&buf[s2 + 1], NULL, 10);
+			int n1 = strtoul(&in->buf[starti], NULL, 10);
+			int n2 = strtoul(&in->buf[indices[FIRST_SEMICOLON] + 1], NULL, 10);
+			int n3 = strtoul(&in->buf[indices[LAST_SEMICOLON] + 1], NULL, 10);
 
-        if (isU)
-            n1 -= 32;
+			if (is_extended) {
+				n1 -= ' ';
+			}
 
-        switch (n1 & 3) {
-        case 0:
-            if ((n1 & 64) != 0) {
-                event->key = TB_KEY_MOUSE_WHEEL_UP;
-            } else {
-                event->key = TB_KEY_MOUSE_LEFT;
-            }
-            break;
-        case 1:
-            if ((n1 & 64) != 0) {
-                event->key = TB_KEY_MOUSE_WHEEL_DOWN;
-            } else {
-                event->key = TB_KEY_MOUSE_MIDDLE;
-            }
-            break;
-        case 2:
-            event->key = TB_KEY_MOUSE_RIGHT;
-            break;
-        case 3:
-            event->key = TB_KEY_MOUSE_RELEASE;
-            break;
-        default:
-            return mi + 1;
-        }
+			int fail = 0;
 
-        if (!isM) {
-            // on xterm mouse release is signaled by lowercase m
-            event->key = TB_KEY_MOUSE_RELEASE;
-        }
+			switch (n1 & 3) {
+			case 0:
+				event->key = ((n1 & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP : TB_KEY_MOUSE_LEFT;
+				break;
+			case 1:
+				event->key = ((n1 & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN : TB_KEY_MOUSE_MIDDLE;
+				break;
+			case 2:
+				event->key = TB_KEY_MOUSE_RIGHT;
+				break;
+			case 3:
+				event->key = TB_KEY_MOUSE_RELEASE;
+				break;
+			default:
+				fail = 1;
+				break;
+			}
 
-        event->type = TB_EVENT_MOUSE; // TB_EVENT_KEY by default
-        if ((n1 & 32) != 0)
-            event->mod |= TB_MOD_MOTION;
+			ret = indices[FIRST_M] + 1; // WHAT
 
-        event->x = (uint8_t)n2 - 1;
-        event->y = (uint8_t)n3 - 1;
+			if (!fail) {
+				if (!m_is_capital) {
+					// on xterm mouse release is signaled by lowercase m
+					event->key = TB_KEY_MOUSE_RELEASE;
+				}
 
-        return mi + 1;
-    }
+				if ((n1 & 32) != 0) {
+					event->mod |= TB_MOD_MOTION;
+				}
 
-    return 0;
-    */
+				event->x = ((uint8_t) n2) - 1;
+				event->y = ((uint8_t) n3) - 1;
+
+				ret = TB_OK;
+			}
+		}
+	}
+		break;
+	}
+
+	if (ret == TB_OK) {
+		event->type = TB_EVENT_MOUSE;
+	}
+
+	return ret;
 }
 
 static int resize_if_needed() {
