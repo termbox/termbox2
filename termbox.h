@@ -2434,7 +2434,8 @@ static int extract_esc_mouse(struct tb_event *event) {
     }
 
     if (type == TYPE_MAX) {
-        ret = TB_ERR_NEED_MORE; /* No match */
+        ret = TB_ERR; /* No match */
+        bytebuf_shift(in, in->len);
         return ret;
     }
 
