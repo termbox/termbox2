@@ -2516,14 +2516,13 @@ static int extract_esc_mouse(struct tb_event *event) {
             || indices[LAST_SEMICOLON] == index_fail) {
             ret = TB_ERR;
         } else {
-            int is_extended = (in->buf[2] != '<');
-            int start = (is_extended ? 2 : 3);
+            int start = (type == TYPE_1015 ? 2 : 3);
 
             int n1 = strtoul(&in->buf[start], NULL, 10);
             int n2 = strtoul(&in->buf[indices[FIRST_SEMICOLON] + 1], NULL, 10);
             int n3 = strtoul(&in->buf[indices[LAST_SEMICOLON] + 1], NULL, 10);
 
-            if (is_extended) {
+            if (type == TYPE_1015) {
                 n1 -= 0x20;
             }
 
@@ -2563,14 +2562,16 @@ static int extract_esc_mouse(struct tb_event *event) {
                 ret = TB_OK;
                 buf_shift = in->len;
             } else {
-                buf_shift = indices[FIRST_M] + 1;
+                ret = TB_ERR_NEED_MORE;
             }
         }
     }
         break;
     }
 
-    bytebuf_shift(in, buf_shift);
+    if (buf_shift > 0) {
+        bytebuf_shift(in, buf_shift);
+    }
 
     if (ret == TB_OK) {
         event->type = TB_EVENT_MOUSE;
