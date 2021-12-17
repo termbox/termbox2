@@ -2302,9 +2302,6 @@ static int wait_event(struct tb_event *event, int timeout) {
         if (rv != TB_ERR_NO_EVENT) {
             break;
         }
-
-        fds[TB_FD_READ].revents = 0;
-        fds[TB_FD_RESIZE].revents = 0;
     } while (timeout == -1);
 
     return rv;
