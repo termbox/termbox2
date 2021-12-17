@@ -192,7 +192,6 @@ extern "C" { // __ffi_strip
 #define TB_EVENT_KEY    1
 #define TB_EVENT_RESIZE 2
 #define TB_EVENT_MOUSE  3
-#define TB_EVENT_FD     4
 
 /* Key modifiers (bitwise) (tb_event.mod) */
 #define TB_MOD_ALT      1
@@ -322,8 +321,6 @@ struct tb_cell {
  *    when TB_EVENT_RESIZE: w, h
  *
  *    when TB_EVENT_MOUSE: key (TB_KEY_MOUSE_*), x, y
- *
- *    when TB_EVENT_FD: None, check the passed FDs instead.
  */
 struct tb_event {
     uint8_t type; /* one of TB_EVENT_* constants */
