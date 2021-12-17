@@ -234,11 +234,12 @@ extern "C" { // __ffi_strip
 #define TB_ERR_TCSETATTR        -16
 #define TB_ERR_UNSUPPORTED_TERM -17
 #define TB_ERR_RESIZE_WRITE     -18
-#define TB_ERR_RESIZE_SELECT    -19
+#define TB_ERR_RESIZE_POLL      -19
 #define TB_ERR_RESIZE_READ      -20
 #define TB_ERR_RESIZE_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
 #define TB_ERR_SELECT           TB_ERR_POLL
+#define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
 
 /* Function types to be used with tb_set_func() */
 #define TB_FUNC_EXTRACT_PRE     0
@@ -1996,7 +1997,7 @@ static int update_term_size_via_esc() {
 
     int poll_rv = poll(&fd, 1, TB_RESIZE_FALLBACK_MS);
     if (poll_rv != 1) {
-        return TB_ERR_RESIZE_SELECT;
+        return TB_ERR_RESIZE_POLL;
     }
 
     char buf[64];
