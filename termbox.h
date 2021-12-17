@@ -1545,7 +1545,6 @@ int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
     char buf[64];
 
     memset(event, 0, sizeof(*event));
-    if_ok_return(rv, extract_event(event));
 
     if (fds[TB_FD_READ].revents & POLLIN) {
         ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
@@ -1554,6 +1553,7 @@ int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
             return TB_ERR_READ;
         } else if (read_rv > 0) {
             bytebuf_nputs(&global.in, buf, read_rv);
+            if_ok_return(rv, extract_event(event));
         }
     }
 
@@ -2302,6 +2302,9 @@ static int wait_event(struct tb_event *event, int timeout) {
         if (rv != TB_ERR_NO_EVENT) {
             break;
         }
+
+        fds[TB_FD_READ].revents = 0;
+        fds[TB_FD_RESIZE].revents = 0;
     } while (timeout == -1);
 
     return rv;
