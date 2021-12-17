@@ -37,6 +37,7 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <poll.h>
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
@@ -191,6 +192,7 @@ extern "C" { // __ffi_strip
 #define TB_EVENT_KEY    1
 #define TB_EVENT_RESIZE 2
 #define TB_EVENT_MOUSE  3
+#define TB_EVENT_FD     4
 
 /* Key modifiers (bitwise) (tb_event.mod) */
 #define TB_MOD_ALT      1
@@ -227,7 +229,7 @@ extern "C" { // __ffi_strip
 #define TB_ERR_RESIZE_IOCTL     -11
 #define TB_ERR_RESIZE_PIPE      -12
 #define TB_ERR_RESIZE_SIGACTION -13
-#define TB_ERR_SELECT           -14
+#define TB_ERR_POLL             -14
 #define TB_ERR_TCGETATTR        -15
 #define TB_ERR_TCSETATTR        -16
 #define TB_ERR_UNSUPPORTED_TERM -17
@@ -236,6 +238,7 @@ extern "C" { // __ffi_strip
 #define TB_ERR_RESIZE_READ      -20
 #define TB_ERR_RESIZE_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
+#define TB_ERR_SELECT           TB_ERR_POLL
 
 /* Function types to be used with tb_set_func() */
 #define TB_FUNC_EXTRACT_PRE     0
@@ -311,9 +314,11 @@ struct tb_cell {
  *                         TB_MOD_CTRL and TB_MOD_SHIFT are only set as
  *                         modifiers to TB_KEY_ARROW_*.
  *
- *   when TB_EVENT_RESIZE: w, h
+ *    when TB_EVENT_RESIZE: w, h
  *
  *    when TB_EVENT_MOUSE: key (TB_KEY_MOUSE_*), x, y
+ *
+ *    when TB_EVENT_FD: None, check the passed FDs instead.
  */
 struct tb_event {
     uint8_t type; /* one of TB_EVENT_* constants */
@@ -426,8 +431,8 @@ int tb_set_output_mode(int mode);
 
 /* Wait for an event up to timeout_ms milliseconds and fill the event structure
  * with it. If no event is available within the timeout period, TB_ERR_NO_EVENT
- * is returned. On a resize event, the underlying select(2) call may be
- * interrupted, yielding a return code of TB_ERR_SELECT. In this case, you may
+ * is returned. On a resize event, the underlying poll(2) call may be
+ * interrupted, yielding a return code of TB_ERR_POLL. In this case, you may
  * check errno via tb_last_errno(). If it's EINTR, you can safely ignore that
  * and call tb_peek_event() again.
  */
@@ -435,6 +440,17 @@ int tb_peek_event(struct tb_event *event, int timeout_ms);
 
 /* Same as tb_peek_event except no timeout. */
 int tb_poll_event(struct tb_event *event);
+
+/* Same as tb_peek_event but extra FDs can be passed to poll on. Termbox will
+ * return TB_OK and set the event's type to TB_EVENT_FD if events occured on
+ * the passed FDs. out_nfds contains the number of FDs that events occured on
+ * and might include termbox internal FDs aswell. */
+int tb_peek_event_with_fds(struct tb_event *event, int timeout_ms, nfds_t nfds,
+  struct pollfd fds[], int *out_nfds);
+
+/* Same as tb_peek_event_with_fds except no timeout. */
+int tb_poll_event_with_fds(struct tb_event *event, nfds_t nfds,
+  struct pollfd fds[], int *out_nfds);
 
 /* Print and printf functions. Specify param out_w to determine width of printed
  * string.
@@ -1262,7 +1278,7 @@ static int read_terminfo_path(const char *path);
 static int parse_terminfo_caps();
 static int load_builtin_caps();
 static const char * get_terminfo_string(int16_t str_offsets_pos, int16_t str_table_pos, int16_t str_table_len, int16_t str_index);
-static int wait_event(struct tb_event *event, struct timeval *timeout);
+static int wait_event(struct tb_event *event, int timeout, nfds_t nfds, struct pollfd fds[], int *out_nfds);
 static int extract_event(struct tb_event *event);
 static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
@@ -1509,17 +1525,23 @@ int tb_set_output_mode(int mode) {
     return TB_OK;
 }
 
-int tb_peek_event(struct tb_event *event, int timeout) {
+int tb_peek_event_with_fds(struct tb_event *event, int timeout_ms, nfds_t nfds, struct pollfd fds[], int *out_nfds) {
     if_not_init_return();
-    struct timeval tv;
-    tv.tv_sec = timeout / 1000;
-    tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
-    return wait_event(event, &tv);
+    return wait_event(event, timeout_ms, nfds, fds, out_nfds);
+}
+
+int tb_peek_event(struct tb_event *event, int timeout_ms) {
+    return tb_peek_event_with_fds(event, timeout_ms, 0, NULL, NULL);
+}
+
+int tb_poll_event_with_fds(struct tb_event *event, nfds_t nfds, struct pollfd fds[], int *out_nfds) {
+    if_not_init_return();
+
+    return wait_event(event, -1, nfds, fds, out_nfds);
 }
 
 int tb_poll_event(struct tb_event *event) {
-    if_not_init_return();
-    return wait_event(event, NULL);
+    return tb_poll_event_with_fds(event, 0, NULL, NULL);
 }
 
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
@@ -1937,21 +1959,16 @@ static int update_term_size_via_esc() {
     #define TB_RESIZE_FALLBACK_MS 1000
     #endif
 
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
-
     char *move_and_report = "\x1b[9999;9999H\x1b[6n";
     ssize_t write_rv = write(global.wfd, move_and_report, strlen(move_and_report));
     if (write_rv != (ssize_t)strlen(move_and_report)) {
         return TB_ERR_RESIZE_WRITE;
     }
 
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(global.rfd, &rfds);
-    int select_rv = select(global.rfd + 1, &rfds, NULL, NULL, &timeout);
-    if (select_rv != 1) {
+    struct pollfd fd = {.fd = global.rfd, .events = POLLIN};
+
+    int poll_rv = poll(&fd, 1, TB_RESIZE_FALLBACK_MS);
+    if (poll_rv != 1) {
         return TB_ERR_RESIZE_SELECT;
     }
 
@@ -2236,34 +2253,52 @@ static const char * get_terminfo_string(int16_t str_offsets_pos, int16_t str_tab
         + (int)*str_offset);
 }
 
-static int wait_event(struct tb_event *event, struct timeval *timeout) {
+static int wait_event(struct tb_event *event, int timeout, nfds_t nfds, struct pollfd fds[], int *out_nfds) {
     int rv;
-    fd_set rfds;
     char buf[64];
 
     memset(event, 0, sizeof(*event));
     if_ok_return(rv, extract_event(event));
 
+    enum { FD_ON_STACK = 10, FD_INITIAL = 2 };
+    enum { RFD = 0, RESIZE_FD };
+
+    struct pollfd stack_fds[FD_ON_STACK] = {
+        [RFD] = {.fd = global.rfd, .events = POLLIN},
+        [RESIZE_FD] = {.fd = global.resize_pipefd[0], .events = POLLIN}
+    };
+
+    struct pollfd *tb_fds = NULL;
+    int fds_need_allocation = ((FD_ON_STACK - FD_INITIAL) < nfds);
+
+    if (fds_need_allocation) {
+        /* TODO how to manage the lifetime ? */
+#if 0
+        tb_fds = tb_malloc((FD_INITIAL + nfds) * sizeof(*tb_fds));
+        memcpy(tb_fds, stack_fds, FD_INITIAL * sizeof(*tb_fds));
+        free(tb_fds);
+#endif
+        return TB_ERR_MEM;
+    } else {
+        tb_fds = stack_fds;
+    }
+
+    for (nfds_t copied = 0; copied < nfds; copied++) {
+        tb_fds[FD_INITIAL + copied] = fds[copied];
+    }
+
     do {
-        FD_ZERO(&rfds);
-        FD_SET(global.rfd, &rfds);
-        FD_SET(global.resize_pipefd[0], &rfds);
+        int poll_rv = poll(tb_fds, FD_INITIAL + nfds, timeout);
 
-        int maxfd = global.resize_pipefd[0] > global.rfd
-            ? global.resize_pipefd[0]
-            : global.rfd;
-
-        int select_rv = select(maxfd + 1, &rfds, NULL, NULL, timeout);
-
-        if (select_rv < 0) {
+        if (poll_rv < 0) {
             // Let EINTR/EAGAIN bubble up
             global.last_errno = errno;
-            return TB_ERR_SELECT;
-        } else if (select_rv == 0) {
+            return TB_ERR_POLL;
+        } else if (poll_rv == 0) {
             return TB_ERR_NO_EVENT;
         }
 
-        if (FD_ISSET(global.rfd, &rfds)) {
+        if (tb_fds[RFD].revents & POLLIN) {
             ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
             if (read_rv < 0) {
                 global.last_errno = errno;
@@ -2273,7 +2308,7 @@ static int wait_event(struct tb_event *event, struct timeval *timeout) {
             }
         }
 
-        if (FD_ISSET(global.resize_pipefd[0], &rfds)) {
+        if (tb_fds[RESIZE_FD].revents & POLLIN) {
             int ignore = 0;
             read(global.resize_pipefd[0], &ignore, sizeof(ignore));
             if_err_return(rv, update_term_size());
@@ -2286,7 +2321,16 @@ static int wait_event(struct tb_event *event, struct timeval *timeout) {
 
         memset(event, 0, sizeof(*event));
         if_ok_return(rv, extract_event(event));
-    } while (!timeout || timeout->tv_sec > 0 || timeout->tv_usec > 0);
+
+        for (nfds_t read = 0; read < nfds; read++) {
+            /* TODO */
+            if (tb_fds[FD_INITIAL + read].revents != 0) {
+                event->type = TB_EVENT_FD;
+                *out_nfds = poll_rv;
+                return TB_OK;
+            }
+        }
+    } while (timeout == -1);
 
     return TB_ERR_NO_EVENT;
 }
