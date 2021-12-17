@@ -273,6 +273,10 @@ typedef uint32_t uintattr_t;
 typedef uint16_t uintattr_t; // __ffi_strip
 #endif
 
+#define TB_FD_READ   0
+#define TB_FD_RESIZE 1
+#define TB_FD_MAX    2
+
 /* The terminal screen is represented as 2d array of cells. The structure is
  * optimized for dealing with single-width (wcwidth()==1) Unicode code points,
  * however some support for grapheme clusters (e.g., combining diacritical
@@ -441,16 +445,8 @@ int tb_peek_event(struct tb_event *event, int timeout_ms);
 /* Same as tb_peek_event except no timeout. */
 int tb_poll_event(struct tb_event *event);
 
-/* Same as tb_peek_event but extra FDs can be passed to poll on. Termbox will
- * return TB_OK and set the event's type to TB_EVENT_FD if events occured on
- * the passed FDs. out_nfds contains the number of FDs that events occured on
- * and might include termbox internal FDs aswell. */
-int tb_peek_event_with_fds(struct tb_event *event, int timeout_ms, nfds_t nfds,
-  struct pollfd fds[], int *out_nfds);
-
-/* Same as tb_peek_event_with_fds except no timeout. */
-int tb_poll_event_with_fds(struct tb_event *event, nfds_t nfds,
-  struct pollfd fds[], int *out_nfds);
+/* Internal termbox FDs that can be used with poll() */
+int tb_pollfds(struct pollfd fds[TB_FD_MAX]);
 
 /* Print and printf functions. Specify param out_w to determine width of printed
  * string.
@@ -1278,7 +1274,7 @@ static int read_terminfo_path(const char *path);
 static int parse_terminfo_caps();
 static int load_builtin_caps();
 static const char * get_terminfo_string(int16_t str_offsets_pos, int16_t str_table_pos, int16_t str_table_len, int16_t str_index);
-static int wait_event(struct tb_event *event, int timeout, nfds_t nfds, struct pollfd fds[], int *out_nfds);
+static int wait_event(struct tb_event *event, int timeout);
 static int extract_event(struct tb_event *event);
 static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
@@ -1525,23 +1521,54 @@ int tb_set_output_mode(int mode) {
     return TB_OK;
 }
 
-int tb_peek_event_with_fds(struct tb_event *event, int timeout_ms, nfds_t nfds, struct pollfd fds[], int *out_nfds) {
-    if_not_init_return();
-    return wait_event(event, timeout_ms, nfds, fds, out_nfds);
-}
-
 int tb_peek_event(struct tb_event *event, int timeout_ms) {
-    return tb_peek_event_with_fds(event, timeout_ms, 0, NULL, NULL);
-}
-
-int tb_poll_event_with_fds(struct tb_event *event, nfds_t nfds, struct pollfd fds[], int *out_nfds) {
     if_not_init_return();
-
-    return wait_event(event, -1, nfds, fds, out_nfds);
+    return wait_event(event, timeout_ms);
 }
 
 int tb_poll_event(struct tb_event *event) {
-    return tb_poll_event_with_fds(event, 0, NULL, NULL);
+    if_not_init_return();
+    return wait_event(event, -1);
+}
+
+int tb_pollfds(struct pollfd fds[TB_FD_MAX]) {
+    if_not_init_return();
+
+    fds[TB_FD_READ] = (struct pollfd) {.fd = global.rfd, .events = POLLIN};
+    fds[TB_FD_RESIZE] = (struct pollfd) {.fd = global.resize_pipefd[0], .events = POLLIN};
+
+    return TB_OK;
+}
+
+int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
+    int rv;
+    char buf[64];
+
+    memset(event, 0, sizeof(*event));
+    if_ok_return(rv, extract_event(event));
+
+    if (fds[TB_FD_READ].revents & POLLIN) {
+        ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
+        if (read_rv < 0) {
+            global.last_errno = errno;
+            return TB_ERR_READ;
+        } else if (read_rv > 0) {
+            bytebuf_nputs(&global.in, buf, read_rv);
+        }
+    }
+
+    if (fds[TB_FD_RESIZE].revents & POLLIN) {
+        int ignore = 0;
+        read(global.resize_pipefd[0], &ignore, sizeof(ignore));
+        if_err_return(rv, update_term_size());
+        event->type = TB_EVENT_RESIZE;
+        event->w = global.width;
+        event->h = global.height;
+        global.need_resize = 1;
+        return TB_OK;
+    }
+
+    return TB_ERR_NO_EVENT;
 }
 
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
@@ -2253,42 +2280,14 @@ static const char * get_terminfo_string(int16_t str_offsets_pos, int16_t str_tab
         + (int)*str_offset);
 }
 
-static int wait_event(struct tb_event *event, int timeout, nfds_t nfds, struct pollfd fds[], int *out_nfds) {
+static int wait_event(struct tb_event *event, int timeout) {
+    struct pollfd fds[TB_FD_MAX];
+
     int rv;
-    char buf[64];
-
-    memset(event, 0, sizeof(*event));
-    if_ok_return(rv, extract_event(event));
-
-    enum { FD_ON_STACK = 10, FD_INITIAL = 2 };
-    enum { RFD = 0, RESIZE_FD };
-
-    struct pollfd stack_fds[FD_ON_STACK] = {
-        [RFD] = {.fd = global.rfd, .events = POLLIN},
-        [RESIZE_FD] = {.fd = global.resize_pipefd[0], .events = POLLIN}
-    };
-
-    struct pollfd *tb_fds = NULL;
-    int fds_need_allocation = ((FD_ON_STACK - FD_INITIAL) < nfds);
-
-    if (fds_need_allocation) {
-        /* TODO how to manage the lifetime ? */
-#if 0
-        tb_fds = tb_malloc((FD_INITIAL + nfds) * sizeof(*tb_fds));
-        memcpy(tb_fds, stack_fds, FD_INITIAL * sizeof(*tb_fds));
-        free(tb_fds);
-#endif
-        return TB_ERR_MEM;
-    } else {
-        tb_fds = stack_fds;
-    }
-
-    for (nfds_t copied = 0; copied < nfds; copied++) {
-        tb_fds[FD_INITIAL + copied] = fds[copied];
-    }
+    if_err_return(rv, tb_pollfds(fds));
 
     do {
-        int poll_rv = poll(tb_fds, FD_INITIAL + nfds, timeout);
+        int poll_rv = poll(fds, TB_FD_MAX, timeout);
 
         if (poll_rv < 0) {
             // Let EINTR/EAGAIN bubble up
@@ -2298,41 +2297,14 @@ static int wait_event(struct tb_event *event, int timeout, nfds_t nfds, struct p
             return TB_ERR_NO_EVENT;
         }
 
-        if (tb_fds[RFD].revents & POLLIN) {
-            ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
-            if (read_rv < 0) {
-                global.last_errno = errno;
-                return TB_ERR_READ;
-            } else if (read_rv > 0) {
-                bytebuf_nputs(&global.in, buf, read_rv);
-            }
-        }
+        rv = tb_event_from_fds(event, fds);
 
-        if (tb_fds[RESIZE_FD].revents & POLLIN) {
-            int ignore = 0;
-            read(global.resize_pipefd[0], &ignore, sizeof(ignore));
-            if_err_return(rv, update_term_size());
-            event->type = TB_EVENT_RESIZE;
-            event->w = global.width;
-            event->h = global.height;
-            global.need_resize = 1;
-            return TB_OK;
-        }
-
-        memset(event, 0, sizeof(*event));
-        if_ok_return(rv, extract_event(event));
-
-        for (nfds_t read = 0; read < nfds; read++) {
-            /* TODO */
-            if (tb_fds[FD_INITIAL + read].revents != 0) {
-                event->type = TB_EVENT_FD;
-                *out_nfds = poll_rv;
-                return TB_OK;
-            }
+        if (rv != TB_ERR_NO_EVENT) {
+            break;
         }
     } while (timeout == -1);
 
-    return TB_ERR_NO_EVENT;
+    return rv;
 }
 
 static int extract_event(struct tb_event *event) {
