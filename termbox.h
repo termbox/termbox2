@@ -2542,9 +2542,12 @@ static int extract_esc_mouse(struct tb_event *event) {
                 event->key = TB_KEY_MOUSE_RELEASE;
                 break;
             default:
+                ret = TB_ERR;
                 fail = 1;
                 break;
             }
+
+            buf_shift = in->len;
 
             if (!fail) {
                 if (!m_is_capital) {
@@ -2560,9 +2563,6 @@ static int extract_esc_mouse(struct tb_event *event) {
                 event->y = ((uint8_t) n3) - 1;
 
                 ret = TB_OK;
-                buf_shift = in->len;
-            } else {
-                ret = TB_ERR_NEED_MORE;
             }
         }
     }
