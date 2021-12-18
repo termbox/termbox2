@@ -443,8 +443,12 @@ int tb_peek_event(struct tb_event *event, int timeout_ms);
 /* Same as tb_peek_event except no timeout. */
 int tb_poll_event(struct tb_event *event);
 
-/* Internal termbox FDs that can be used with poll() */
+/* Internal termbox FDs that can be used with poll(). Must be passed to
+ * tb_event_from_fds() if activity is detected. */
 int tb_pollfds(struct pollfd fds[TB_FD_MAX]);
+
+/* Extract an event from any FDs that received activity. */
+int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]);
 
 /* Print and printf functions. Specify param out_w to determine width of printed
  * string.
@@ -1543,6 +1547,7 @@ int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
     char buf[64];
 
     memset(event, 0, sizeof(*event));
+    if_ok_return(rv, extract_event(event));
 
     if (fds[TB_FD_READ].revents & POLLIN) {
         ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
@@ -1551,7 +1556,6 @@ int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
             return TB_ERR_READ;
         } else if (read_rv > 0) {
             bytebuf_nputs(&global.in, buf, read_rv);
-            if_ok_return(rv, extract_event(event));
         }
     }
 
@@ -1565,6 +1569,8 @@ int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
         global.need_resize = 1;
         return TB_OK;
     }
+
+    if_ok_return(rv, extract_event(event));
 
     return TB_ERR_NO_EVENT;
 }
