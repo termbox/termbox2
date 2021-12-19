@@ -277,10 +277,6 @@ typedef uint32_t uintattr_t;
 typedef uint16_t uintattr_t; // __ffi_strip
 #endif
 
-#define TB_FD_READ   0
-#define TB_FD_RESIZE 1
-#define TB_FD_MAX    2
-
 /* The terminal screen is represented as 2d array of cells. The structure is
  * optimized for dealing with single-width (wcwidth()==1) Unicode code points,
  * however some support for grapheme clusters (e.g., combining diacritical
