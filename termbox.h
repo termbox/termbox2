@@ -37,7 +37,11 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#if !TB_OPT_SELECT
 #include <poll.h>
+#else
+#include <sys/select.h>
+#endif
 #include <termios.h>
 #include <unistd.h>
 #include <signal.h>
@@ -443,12 +447,9 @@ int tb_peek_event(struct tb_event *event, int timeout_ms);
 /* Same as tb_peek_event except no timeout. */
 int tb_poll_event(struct tb_event *event);
 
-/* Internal termbox FDs that can be used with poll(). Must be passed to
- * tb_event_from_fds() if activity is detected. */
-int tb_pollfds(struct pollfd fds[TB_FD_MAX]);
-
-/* Extract an event from any FDs that received activity. */
-int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]);
+/* Internal termbox FDs that can be used with poll() / select(). Must call
+ * tb_poll_event() / tb_peek_event() if activity is detected. */
+int tb_get_fds(int *ttyfd, int *resizefd);
 
 /* Print and printf functions. Specify param out_w to determine width of printed
  * string.
@@ -1533,46 +1534,13 @@ int tb_poll_event(struct tb_event *event) {
     return wait_event(event, -1);
 }
 
-int tb_pollfds(struct pollfd fds[TB_FD_MAX]) {
+int tb_get_fds(int *ttyfd, int *resizefd) {
     if_not_init_return();
 
-    fds[TB_FD_READ] = (struct pollfd) {.fd = global.rfd, .events = POLLIN};
-    fds[TB_FD_RESIZE] = (struct pollfd) {.fd = global.resize_pipefd[0], .events = POLLIN};
+    *ttyfd = global.rfd;
+    *resizefd = global.resize_pipefd[0];
 
     return TB_OK;
-}
-
-int tb_event_from_fds(struct tb_event *event, struct pollfd fds[TB_FD_MAX]) {
-    int rv;
-    char buf[64];
-
-    memset(event, 0, sizeof(*event));
-    if_ok_return(rv, extract_event(event));
-
-    if (fds[TB_FD_READ].revents & POLLIN) {
-        ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
-        if (read_rv < 0) {
-            global.last_errno = errno;
-            return TB_ERR_READ;
-        } else if (read_rv > 0) {
-            bytebuf_nputs(&global.in, buf, read_rv);
-        }
-    }
-
-    if (fds[TB_FD_RESIZE].revents & POLLIN) {
-        int ignore = 0;
-        read(global.resize_pipefd[0], &ignore, sizeof(ignore));
-        if_err_return(rv, update_term_size());
-        event->type = TB_EVENT_RESIZE;
-        event->w = global.width;
-        event->h = global.height;
-        global.need_resize = 1;
-        return TB_OK;
-    }
-
-    if_ok_return(rv, extract_event(event));
-
-    return TB_ERR_NO_EVENT;
 }
 
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
@@ -1996,9 +1964,21 @@ static int update_term_size_via_esc() {
         return TB_ERR_RESIZE_WRITE;
     }
 
+#if !TB_OPT_SELECT
     struct pollfd fd = {.fd = global.rfd, .events = POLLIN};
-
     int poll_rv = poll(&fd, 1, TB_RESIZE_FALLBACK_MS);
+#else
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(global.rfd, &fds);
+
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
+
+    int poll_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
+#endif
+
     if (poll_rv != 1) {
         return TB_ERR_RESIZE_POLL;
     }
@@ -2285,13 +2265,38 @@ static const char * get_terminfo_string(int16_t str_offsets_pos, int16_t str_tab
 }
 
 static int wait_event(struct tb_event *event, int timeout) {
-    struct pollfd fds[TB_FD_MAX];
-
     int rv;
-    if_err_return(rv, tb_pollfds(fds));
+    char buf[64];
+
+    memset(event, 0, sizeof(*event));
+    if_ok_return(rv, extract_event(event));
+
+#if !TB_OPT_SELECT
+    struct pollfd fds[2] = {
+        {.fd = global.rfd, .events = POLLIN},
+        {.fd = global.resize_pipefd[0], .events = POLLIN}
+    };
+#else
+    fd_set fds;
+    struct timeval tv;
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
+#endif
 
     do {
-        int poll_rv = poll(fds, TB_FD_MAX, timeout);
+#if !TB_OPT_SELECT
+        int poll_rv = poll(fds, 2, timeout);
+#else
+        FD_ZERO(&fds);
+        FD_SET(global.rfd, &fds);
+        FD_SET(global.resize_pipefd[0], &fds);
+
+        int maxfd = global.resize_pipefd[0] > global.rfd
+            ? global.resize_pipefd[0]
+            : global.rfd;
+
+        int poll_rv = select(maxfd + 1, &fds, NULL, NULL, (timeout < 0) ? NULL : &tv);
+#endif
 
         if (poll_rv < 0) {
             // Let EINTR/EAGAIN bubble up
@@ -2301,11 +2306,37 @@ static int wait_event(struct tb_event *event, int timeout) {
             return TB_ERR_NO_EVENT;
         }
 
-        rv = tb_event_from_fds(event, fds);
+#if !TB_OPT_SELECT
+        int tty_has_events = (fds[0].revents & POLLIN);
+        int resize_has_events = (fds[1].revents & POLLIN);
+#else
+        int tty_has_events = (FD_ISSET(global.rfd, &fds));
+        int resize_has_events = (FD_ISSET(global.resize_pipefd[0], &fds));
+#endif
 
-        if (rv != TB_ERR_NO_EVENT) {
-            break;
+        if (tty_has_events) {
+            ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
+            if (read_rv < 0) {
+                global.last_errno = errno;
+                return TB_ERR_READ;
+            } else if (read_rv > 0) {
+                bytebuf_nputs(&global.in, buf, read_rv);
+            }
         }
+
+        if (resize_has_events) {
+            int ignore = 0;
+            read(global.resize_pipefd[0], &ignore, sizeof(ignore));
+            if_err_return(rv, update_term_size());
+            event->type = TB_EVENT_RESIZE;
+            event->w = global.width;
+            event->h = global.height;
+            global.need_resize = 1;
+            return TB_OK;
+        }
+
+        memset(event, 0, sizeof(*event));
+        if_ok_return(rv, extract_event(event));
     } while (timeout == -1);
 
     return rv;
