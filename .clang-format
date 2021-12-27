@@ -1,0 +1,13 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 80
+AlignAfterOpenBracket: DontAlign
+AllowAllArgumentsOnNextLine: false
+AlignConsecutiveMacros: AcrossEmptyLinesAndComments
+AlignArrayOfStructures: Left
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Always
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterControlStatement: MultiLine
+IndentCaseLabels: true
