@@ -178,19 +178,35 @@ extern "C" { // __ffi_strip
 #define TB_HARDCAP_EXIT_MOUSE   "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
 
 /* Colors (numeric) and attributes (bitwise) (tb_cell.fg, tb_cell.bg) */
-#define TB_DEFAULT              0x0000
-#define TB_BLACK                0x0001
-#define TB_RED                  0x0002
-#define TB_GREEN                0x0003
-#define TB_YELLOW               0x0004
-#define TB_BLUE                 0x0005
-#define TB_MAGENTA              0x0006
-#define TB_CYAN                 0x0007
-#define TB_WHITE                0x0008
-#define TB_BOLD                 0x0100
-#define TB_UNDERLINE            0x0200
-#define TB_REVERSE              0x0400
-#define TB_ITALIC               0x0800
+#ifdef TB_OPT_TRUECOLOR
+#define TB_DEFAULT   0xFFFFFF
+#define TB_BLACK     0x000000
+#define TB_RED       0xFF0000
+#define TB_GREEN     0x00FF00
+#define TB_YELLOW    0xFFFF00
+#define TB_BLUE      0x0000FF
+#define TB_MAGENTA   0xFF00FF
+#define TB_CYAN      0x00FFFF
+#define TB_WHITE     0xFFFFFF
+#define TB_BOLD      0x01000000
+#define TB_UNDERLINE 0x02000000
+#define TB_REVERSE   0x04000000
+#define TB_ITALIC    0x08000000
+#else
+#define TB_DEFAULT   0x0000
+#define TB_BLACK     0x0001
+#define TB_RED       0x0002
+#define TB_GREEN     0x0003
+#define TB_YELLOW    0x0004
+#define TB_BLUE      0x0005
+#define TB_MAGENTA   0x0006
+#define TB_CYAN      0x0007
+#define TB_WHITE     0x0008
+#define TB_BOLD      0x0100
+#define TB_UNDERLINE 0x0200
+#define TB_REVERSE   0x0400
+#define TB_ITALIC    0x0800
+#endif
 
 /* Event types (tb_event.type) */
 #define TB_EVENT_KEY            1
@@ -2782,17 +2798,24 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
 
         case TB_OUTPUT_TRUECOLOR:
             send_literal(rv, "\x1b[38;2;");
-            send_num(rv, nbuf, fg >> 16 & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, fg >> 8 & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, fg & 0xff);
-            send_literal(rv, ";48;2;");
-            send_num(rv, nbuf, bg >> 16 & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, bg >> 8 & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, bg & 0xff);
+
+            if (fg != TB_DEFAULT) {
+                send_num(rv, nbuf, fg >> 16 & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, fg >> 8 & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, fg & 0xff);
+            }
+
+            if (bg != TB_DEFAULT) {
+                send_literal(rv, ";48;2;");
+                send_num(rv, nbuf, bg >> 16 & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, bg >> 8 & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, bg & 0xff);
+            }
+
             send_literal(rv, "m");
             break;
     }
