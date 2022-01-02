@@ -1735,6 +1735,9 @@ const char *tb_strerror(int err) {
             return "Unsupported terminal";
         case TB_ERR_CAP_COLLISION:
             return "Termcaps collision";
+        case TB_ERR_RESIZE_SSCANF:
+            return "Terminal width/height not received by sscanf() after "
+                   "resize";
         case TB_ERR:
         case TB_ERR_INIT_OPEN:
         case TB_ERR_READ:
@@ -1747,7 +1750,6 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_WRITE:
         case TB_ERR_RESIZE_POLL:
         case TB_ERR_RESIZE_READ:
-        case TB_ERR_RESIZE_SSCANF:
         default:
             return strerror(global.last_errno);
     }
@@ -2066,7 +2068,6 @@ static int update_term_size_via_esc() {
 
     int rw, rh;
     if (sscanf(buf, "\x1b[%d;%dR", &rh, &rw) != 2) {
-        global.last_errno = errno;
         return TB_ERR_RESIZE_SSCANF;
     }
 
