@@ -241,6 +241,7 @@ extern "C" { // __ffi_strip
 #define TB_ERR_RESIZE_READ      -20
 #define TB_ERR_RESIZE_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
+
 #define TB_ERR_SELECT           TB_ERR_POLL
 #define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
 
@@ -480,6 +481,8 @@ int tb_utf8_char_length(char c);
 int tb_utf8_char_to_unicode(uint32_t *out, const char *c);
 int tb_utf8_unicode_to_char(char *out, uint32_t c);
 int tb_last_errno();
+const char *tb_strerror(int err);
+
 struct tb_cell *tb_cell_buffer();
 
 #ifdef __cplusplus
@@ -1710,6 +1713,48 @@ int tb_last_errno() {
     return global.last_errno;
 }
 
+const char *tb_strerror(int err) {
+    switch (err) {
+        case TB_OK:
+            return "Success";
+        case TB_ERR_NEED_MORE:
+            return "Not enough input";
+        case TB_ERR_INIT_ALREADY:
+            return "Termbox initialized already";
+        case TB_ERR_MEM:
+            return "Out of memory";
+        case TB_ERR_NO_EVENT:
+            return "No event";
+        case TB_ERR_NO_TERM:
+            return "No TERM in environment";
+        case TB_ERR_NOT_INIT:
+            return "Termbox not initialized";
+        case TB_ERR_OUT_OF_BOUNDS:
+            return "Out of bounds";
+        case TB_ERR_UNSUPPORTED_TERM:
+            return "Unsupported terminal";
+        case TB_ERR_CAP_COLLISION:
+            return "Termcaps collision";
+        case TB_ERR_RESIZE_SSCANF:
+            return "Terminal width/height not received by sscanf() after "
+                   "resize";
+        case TB_ERR:
+        case TB_ERR_INIT_OPEN:
+        case TB_ERR_READ:
+        case TB_ERR_RESIZE_IOCTL:
+        case TB_ERR_RESIZE_PIPE:
+        case TB_ERR_RESIZE_SIGACTION:
+        case TB_ERR_POLL:
+        case TB_ERR_TCGETATTR:
+        case TB_ERR_TCSETATTR:
+        case TB_ERR_RESIZE_WRITE:
+        case TB_ERR_RESIZE_POLL:
+        case TB_ERR_RESIZE_READ:
+        default:
+            return strerror(global.last_errno);
+    }
+}
+
 static int tb_reset() {
     int ttyfd_open = global.ttyfd_open;
     memset(&global, 0, sizeof(global));
@@ -2009,12 +2054,14 @@ static int update_term_size_via_esc() {
 #endif
 
     if (poll_rv != 1) {
+        global.last_errno = errno;
         return TB_ERR_RESIZE_POLL;
     }
 
     char buf[64];
     ssize_t read_rv = read(global.rfd, buf, sizeof(buf) - 1);
     if (read_rv < 1) {
+        global.last_errno = errno;
         return TB_ERR_RESIZE_READ;
     }
     buf[read_rv] = '\0';
