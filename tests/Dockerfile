@@ -11,4 +11,4 @@ ENV LC_ALL=en_US.UTF-8 \
     LANGUAGE=en_US.UTF-8
 COPY . /termbox
 WORKDIR /termbox
-RUN ./tests/run.sh
+RUN make clean test_local
