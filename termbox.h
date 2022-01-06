@@ -342,6 +342,7 @@ struct tb_event {
 int tb_init();
 int tb_init_file(const char *path);
 int tb_init_fd(int ttyfd);
+int tb_init_rwfd(int rfd, int wfd);
 int tb_shutdown();
 
 /* Returns the size of the internal back buffer (which is the same as terminal's
@@ -1267,7 +1268,6 @@ static const unsigned char utf8_length[256] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 static const unsigned char utf8_mask[6] = {0x7f, 0x1f, 0x0f, 0x07, 0x03, 0x01};
 
 static int tb_reset();
-static int tb_init_rwfd(int rfd, int wfd);
 static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
     size_t *out_w, const char *fmt, va_list vl);
 static int init_term_attrs();
@@ -1342,6 +1342,33 @@ int tb_init_file(const char *path) {
 
 int tb_init_fd(int ttyfd) {
     return tb_init_rwfd(ttyfd, ttyfd);
+}
+
+int tb_init_rwfd(int rfd, int wfd) {
+    int rv;
+
+    tb_reset();
+    global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
+    global.rfd = rfd;
+    global.wfd = wfd;
+
+    do {
+        if_err_break(rv, init_term_attrs());
+        if_err_break(rv, init_term_caps());
+        if_err_break(rv, init_cap_trie());
+        if_err_break(rv, init_resize_handler());
+        if_err_break(rv, send_init_escape_codes());
+        if_err_break(rv, send_clear());
+        if_err_break(rv, update_term_size());
+        if_err_break(rv, init_cellbuf());
+        global.initialized = 1;
+    } while (0);
+
+    if (rv != TB_OK) {
+        tb_deinit();
+    }
+
+    return rv;
 }
 
 int tb_shutdown() {
@@ -1777,33 +1804,6 @@ static int tb_reset() {
     global.input_mode = TB_INPUT_ESC;
     global.output_mode = TB_OUTPUT_NORMAL;
     return TB_OK;
-}
-
-static int tb_init_rwfd(int rfd, int wfd) {
-    int rv;
-
-    tb_reset();
-    global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
-    global.rfd = rfd;
-    global.wfd = wfd;
-
-    do {
-        if_err_break(rv, init_term_attrs());
-        if_err_break(rv, init_term_caps());
-        if_err_break(rv, init_cap_trie());
-        if_err_break(rv, init_resize_handler());
-        if_err_break(rv, send_init_escape_codes());
-        if_err_break(rv, send_clear());
-        if_err_break(rv, update_term_size());
-        if_err_break(rv, init_cellbuf());
-        global.initialized = 1;
-    } while (0);
-
-    if (rv != TB_OK) {
-        tb_deinit();
-    }
-
-    return rv;
 }
 
 static int init_term_attrs() {
