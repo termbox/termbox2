@@ -1274,7 +1274,7 @@ static int init_term_attrs();
 static int init_term_caps();
 static int init_cap_trie();
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod);
-static int cap_trie_find(const char *buf, struct cap_trie_t **last,
+static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
     size_t *depth);
 static int cap_trie_deinit(struct cap_trie_t *node);
 static int init_resize_handler();
@@ -1915,13 +1915,13 @@ static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
     return TB_OK;
 }
 
-static int cap_trie_find(const char *buf, struct cap_trie_t **last,
+static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
     size_t *depth) {
     struct cap_trie_t *next, *node = &global.cap_trie;
     size_t i, j;
     *last = node;
     *depth = 0;
-    for (i = 0; buf[i] != '\0'; i++) {
+    for (i = 0; i < nbuf; i++) {
         char c = buf[i];
         next = NULL;
 
@@ -2505,7 +2505,7 @@ static int extract_esc_cap(struct tb_event *event) {
     struct cap_trie_t *node;
     size_t depth;
 
-    if_err_return(rv, cap_trie_find(in->buf, &node, &depth));
+    if_err_return(rv, cap_trie_find(in->buf, in->len, &node, &depth));
     if (node->is_leaf) {
         // Found a leaf node
         event->type = TB_EVENT_KEY;
