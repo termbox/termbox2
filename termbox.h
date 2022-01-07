@@ -256,6 +256,13 @@ extern "C" { // __ffi_strip
 #define TB_OPT_PRINTF_BUF 4096
 #endif
 
+/* Define this to set the size of the read buffer used when reading
+ * from the tty
+ */
+#ifndef TB_OPT_READ_BUF
+#define TB_OPT_READ_BUF 64
+#endif
+
 /* Define this for limited back compat with termbox v1 */
 #ifdef TB_OPT_V1_COMPAT
 #define tb_change_cell          tb_set_cell
@@ -2058,7 +2065,7 @@ static int update_term_size_via_esc() {
         return TB_ERR_RESIZE_POLL;
     }
 
-    char buf[64];
+    char buf[TB_OPT_READ_BUF];
     ssize_t read_rv = read(global.rfd, buf, sizeof(buf) - 1);
     if (read_rv < 1) {
         global.last_errno = errno;
@@ -2337,7 +2344,7 @@ static const char *get_terminfo_string(int16_t str_offsets_pos,
 
 static int wait_event(struct tb_event *event, int timeout) {
     int rv;
-    char buf[64];
+    char buf[TB_OPT_READ_BUF];
 
     memset(event, 0, sizeof(*event));
     if_ok_return(rv, extract_event(event));
