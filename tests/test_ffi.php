@@ -38,8 +38,8 @@ $test = new class() {
 
             // Special case for evaluating `(0xFFFF - ...)` values
             $match2 = [];
-            if (preg_match('/^\(0xFFFF - (\d+)\)$/', $define_value, $match2)) {
-                $define_value = 0xFFFF - (int)$match[2];
+            if (preg_match('/^\(0xffff - (\d+)\)$/i', $define_value, $match2)) {
+                $define_value = 0xffff - (int)$match2[1];
             } else if (substr($define_value, 0, 2) === '0x') {
                 $define_value = hexdec(substr($define_value, 2));
             }
@@ -84,6 +84,9 @@ $test = new class() {
     }
 
     public function log(string $str): void {
+        if (!$this->test_log) {
+            return;
+        }
         $lines = explode("\n", $str);
         foreach ($lines as $line) {
             file_put_contents($this->test_log, "  $line\n", FILE_APPEND);
