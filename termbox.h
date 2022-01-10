@@ -2111,6 +2111,8 @@ static int tb_deinit() {
             global.ttyfd_open = 0;
         }
     }
+
+    sigaction(SIGWINCH, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
     if (global.resize_pipefd[0] >= 0)
         close(global.resize_pipefd[0]);
     if (global.resize_pipefd[1] >= 0)
@@ -2728,7 +2730,9 @@ static int resize_if_needed() {
 }
 
 static void handle_resize(int sig) {
+    int errno_copy = errno;
     write(global.resize_pipefd[1], &sig, sizeof(sig));
+    errno = errno_copy;
 }
 
 static int send_attr(uintattr_t fg, uintattr_t bg) {
