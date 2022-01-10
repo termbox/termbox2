@@ -2696,6 +2696,8 @@ static int extract_esc_mouse(struct tb_event *event) {
                 }
             }
         } break;
+        case TYPE_MAX:
+            ret = TB_ERR;
     }
 
     if (buf_shift > 0) {
