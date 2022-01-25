@@ -216,7 +216,7 @@ extern "C" { // __ffi_strip
 #define TB_OUTPUT_216           3
 #define TB_OUTPUT_GRAYSCALE     4
 #ifdef TB_OPT_TRUECOLOR
-#define TB_OUTPUT_TRUECOLOR     5
+#define TB_OUTPUT_TRUECOLOR 5
 #endif
 
 /* Common function return values unless otherwise noted */
@@ -2785,18 +2785,24 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
             cbg += 0xe8;
             break;
 
+#ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
             cfg = fg;
             cbg = bg;
             break;
+#endif
     }
 
+#ifdef TB_OPT_TRUECOLOR
     if (global.output_mode != TB_OUTPUT_TRUECOLOR) {
+#endif
         if (fg & TB_BOLD)
-            if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
+            if_err_return(rv,
+                bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
 
         if (bg & TB_BOLD)
-            if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
+            if_err_return(rv,
+                bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
 
         if (fg & TB_UNDERLINE)
             if_err_return(rv,
@@ -2809,7 +2815,9 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         if ((fg & TB_REVERSE) || (bg & TB_REVERSE))
             if_err_return(rv,
                 bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
+#ifdef TB_OPT_TRUECOLOR
     }
+#endif
 
     if_err_return(rv, send_sgr(cfg, cbg));
 
