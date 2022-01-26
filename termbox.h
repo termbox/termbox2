@@ -507,6 +507,10 @@ struct tb_cell *tb_cell_buffer();
 
 #ifdef TB_IMPL
 
+#ifndef TB_OPT_TRUECOLOR
+#define TB_OUTPUT_TRUECOLOR (-1)
+#endif
+
 #define if_err_return(rv, expr)                                                \
     if (((rv) = (expr)) != TB_OK)                                              \
     return (rv)
@@ -2785,17 +2789,13 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
             cbg += 0xe8;
             break;
 
-#ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
             cfg = fg;
             cbg = bg;
             break;
-#endif
     }
 
-#ifdef TB_OPT_TRUECOLOR
     if (global.output_mode != TB_OUTPUT_TRUECOLOR) {
-#endif
         if (fg & TB_BOLD)
             if_err_return(rv,
                 bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
@@ -2815,9 +2815,7 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         if ((fg & TB_REVERSE) || (bg & TB_REVERSE))
             if_err_return(rv,
                 bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
-#ifdef TB_OPT_TRUECOLOR
     }
-#endif
 
     if_err_return(rv, send_sgr(cfg, cbg));
 
