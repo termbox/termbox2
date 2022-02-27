@@ -26,6 +26,14 @@ SOFTWARE.
 #ifndef __TERMBOX_H
 #define __TERMBOX_H
 
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE
+#endif
+
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
