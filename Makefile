@@ -3,6 +3,7 @@ prefix?=/usr/local
 termbox_cflags:=-std=c99 -Wall -Wextra -pedantic -Wno-unused-result -g -O0 -D_XOPEN_SOURCE -D_DEFAULT_SOURCE $(CFLAGS)
 termbox_demos:=$(patsubst demo/%.c,demo/%,$(wildcard demo/*.c))
 termbox_so:=libtermbox.so
+termbox_a:=libtermbox.a
 termbox_o:=termbox.o
 termbox_h:=termbox.h
 
@@ -16,6 +17,9 @@ $(termbox_o): $(termbox_h)
 
 $(termbox_so): $(termbox_o)
 	$(CC) -shared $(termbox_o) -o $@
+
+$(termbox_a): $(termbox_o)
+	$(AR) rcs $@ $(termbox_o)
 
 terminfo:
 	awk -vg=0 'g==0{print} /BEGIN codegen h/{g=1; system("./codegen.sh h")} /END codegen h/{g=0; print} g==1{next}' termbox.h >termbox.h.tmp && mv -vf termbox.h.tmp termbox.h
