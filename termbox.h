@@ -430,7 +430,7 @@ int tb_set_input_mode(int mode);
  * 2. TB_OUTPUT_256        => [0..255]
  *    In this mode you get 256 distinct colors:
  *      0x00 - 0x07: the 8 colors as in TB_OUTPUT_NORMAL
- *      0x08 - 0x0f: TB_<color> | TB_BOLD
+ *      0x08 - 0x0f: bright versions of the above
  *      0x10 - 0xe7: 216 different colors
  *      0xe8 - 0xff: 24 different shades of grey
  *
