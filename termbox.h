@@ -336,7 +336,7 @@ struct tb_cell {
  *                         TB_MOD_CTRL and TB_MOD_SHIFT are only set as
  *                         modifiers to TB_KEY_ARROW_*.
  *
- *    when TB_EVENT_RESIZE: w, h
+ *   when TB_EVENT_RESIZE: w, h
  *
  *    when TB_EVENT_MOUSE: key (TB_KEY_MOUSE_*), x, y
  */
@@ -404,10 +404,11 @@ int tb_extend_cell(int x, int y, uint32_t ch);
  *    sequence, the next keyboard event is returned with a TB_MOD_ALT modifier.
  *
  * You can also apply TB_INPUT_MOUSE via bitwise OR operation to either of the
- * modes (e.g. TB_INPUT_ESC | TB_INPUT_MOUSE). If none of the main two modes
- * were set, but the mouse mode was, TB_INPUT_ESC mode is used. If for some
- * reason you've decided to use (TB_INPUT_ESC | TB_INPUT_ALT) combination, it
- * will behave as if only TB_INPUT_ESC was selected.
+ * modes (e.g., TB_INPUT_ESC | TB_INPUT_MOUSE) to receive TB_EVENT_MOUSE events.
+ * If none of the main two modes were set, but the mouse mode was, TB_INPUT_ESC
+ * mode is used. If for some reason you've decided to use
+ * (TB_INPUT_ESC | TB_INPUT_ALT) combination, it will behave as if only
+ * TB_INPUT_ESC was selected.
  *
  * If mode is TB_INPUT_CURRENT, the function returns the current input mode.
  *
