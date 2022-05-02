@@ -437,7 +437,7 @@ int tb_set_input_mode(int mode);
  *      tb_set_cell(x, y, '@', 184, 240);
  *      tb_set_cell(x, y, '@', 0xb8, 0xf0);
  *
- * 3. TB_OUTPUT_216        => [0..216]
+ * 3. TB_OUTPUT_216        => [0..215]
  *    This mode supports the 3rd range of TB_OUTPUT_256 only, but you don't need
  *    to provide an offset.
  *
