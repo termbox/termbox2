@@ -424,6 +424,11 @@ int tb_set_input_mode(int mode);
  *    Colors may be bitwise OR'd with attributes:
  *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC
  *
+ *    Some notes: Applying TB_BOLD as a bg attribute will emit an escape code
+ *    for blinking text. TB_REVERSE can be applied as either a fg or bg
+ *    attribute for the same effect. TB_UNDERLINE and TB_ITALIC apply as fg
+ *    attributes only, and are ignored as bg attributes.
+ *
  *    Example usage:
  *      tb_set_cell(x, y, '@', TB_BLACK | TB_BOLD, TB_RED);
  *
