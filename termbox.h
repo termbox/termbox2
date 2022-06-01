@@ -199,6 +199,14 @@ extern "C" { // __ffi_strip
 #define TB_UNDERLINE            0x0200
 #define TB_REVERSE              0x0400
 #define TB_ITALIC               0x0800
+#define TB_BLINK                0x1000
+#ifdef TB_OPT_TRUECOLOR
+#define TB_TRUECOLOR_BOLD       0x01000000
+#define TB_TRUECOLOR_UNDERLINE  0x02000000
+#define TB_TRUECOLOR_REVERSE    0x04000000
+#define TB_TRUECOLOR_ITALIC     0x08000000
+#define TB_TRUECOLOR_BLINK      0x10000000
+#endif
 
 /* Event types (tb_event.type) */
 #define TB_EVENT_KEY            1
@@ -422,11 +430,10 @@ int tb_set_input_mode(int mode);
  *      TB_BLACK, TB_RED, TB_GREEN, TB_YELLOW,
  *      TB_BLUE, TB_MAGENTA, TB_CYAN, TB_WHITE
  *    Colors may be bitwise OR'd with attributes:
- *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC
+ *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC, TB_BLINK
  *
- *    Some notes: Applying TB_BOLD as a bg attribute will emit an escape code
- *    for blinking text. TB_REVERSE can be applied as either a fg or bg
- *    attribute for the same effect. TB_UNDERLINE and TB_ITALIC apply as fg
+ *    Some notes: TB_REVERSE can be applied as either fg or bg attributes for
+ *    the same effect. TB_BOLD, TB_UNDERLINE, TB_ITALIC, TB_BLINK apply as fg
  *    attributes only, and are ignored as bg attributes.
  *
  *    Example usage:
@@ -444,16 +451,16 @@ int tb_set_input_mode(int mode);
  *      tb_set_cell(x, y, '@', 0xb8, 0xf0);
  *
  * 3. TB_OUTPUT_216        => [0..215]
- *    This mode supports the 3rd range of TB_OUTPUT_256 only, but you don't need
- *    to provide an offset.
+ *    This mode supports the 3rd range of TB_OUTPUT_256 only, but you don't
+ *    need to provide an offset.
  *
  * 4. TB_OUTPUT_GRAYSCALE  => [0..23]
- *    This mode supports the 4th range of TB_OUTPUT_256 only, but you dont need
- *    to provide an offset.
+ *    This mode supports the 4th range of TB_OUTPUT_256 only, but you don't
+ *    need to provide an offset.
  *
  * 5. TB_OUTPUT_TRUECOLOR  => [0x000000..0xffffff]
  *    This mode provides 24-bit color on supported terminals. The format is
- *    0xRRGGBB.
+ *    0xRRGGBB. Colors may be bitwise OR'd with `TB_TRUECOLOR_*` attributes.
  *
  * If mode is TB_OUTPUT_CURRENT, the function returns the current output mode.
  *
@@ -2809,27 +2816,40 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
             break;
     }
 
-    if (global.output_mode != TB_OUTPUT_TRUECOLOR) {
-        if (fg & TB_BOLD)
-            if_err_return(rv,
-                bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
-
-        if (bg & TB_BOLD)
-            if_err_return(rv,
-                bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
-
-        if (fg & TB_UNDERLINE)
-            if_err_return(rv,
-                bytebuf_puts(&global.out, global.caps[TB_CAP_UNDERLINE]));
-
-        if (fg & TB_ITALIC)
-            if_err_return(rv,
-                bytebuf_puts(&global.out, global.caps[TB_CAP_ITALIC]));
-
-        if ((fg & TB_REVERSE) || (bg & TB_REVERSE))
-            if_err_return(rv,
-                bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
+    uintattr_t attr_bold, attr_blink, attr_italic, attr_underline, attr_reverse;
+    if (global.output_mode == TB_OUTPUT_TRUECOLOR) {
+        attr_bold = TB_TRUECOLOR_BOLD;
+        attr_blink = TB_TRUECOLOR_BLINK;
+        attr_italic = TB_TRUECOLOR_ITALIC;
+        attr_underline = TB_TRUECOLOR_UNDERLINE;
+        attr_reverse = TB_TRUECOLOR_REVERSE;
+    } else {
+        attr_bold = TB_BOLD;
+        attr_blink = TB_BLINK;
+        attr_italic = TB_ITALIC;
+        attr_underline = TB_UNDERLINE;
+        attr_reverse = TB_REVERSE;
     }
+
+    if (fg & attr_bold)
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
+
+    if (fg & attr_blink)
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
+
+    if (fg & attr_underline)
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_UNDERLINE]));
+
+    if (fg & attr_italic)
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_ITALIC]));
+
+    if ((fg & attr_reverse) || (bg & attr_reverse))
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
 
     if_err_return(rv, send_sgr(cfg, cbg));
 

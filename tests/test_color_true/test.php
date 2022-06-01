@@ -167,17 +167,18 @@ foreach ($css_colors as $color_name => $fg) {
     }
 }
 
-// We should not be emitting bold, underline, etc in true-color mode
+// Test bold, underline, italic in true-color mode
 $x = 0;
-$color = 0x808080 | $test->defines['TB_BOLD'];
-$test->ffi->tb_printf($x, ++$y, $color, 0, 'no bold (#%06x)', $color);
-$color = 0x808080 | $test->defines['TB_UNDERLINE'];
-$test->ffi->tb_printf($x, ++$y, $color, 0, 'no underline (#%06x)', $color);
-$color = 0x808080 | $test->defines['TB_ITALIC'];
-$test->ffi->tb_printf($x, ++$y, $color, 0, 'no italic (#%06x)', $color);
+$color = 0x808080 | $test->defines['TB_TRUECOLOR_BOLD'];
+$test->ffi->tb_printf($x, ++$y, $color, 0, 'yes bold (#%06x)', $color);
+$color = 0x808080 | $test->defines['TB_TRUECOLOR_UNDERLINE'];
+$test->ffi->tb_printf($x, ++$y, $color, 0, 'yes underline (#%06x)', $color);
+$color = 0x808080 | $test->defines['TB_TRUECOLOR_ITALIC'];
+$test->ffi->tb_printf($x, ++$y, $color, 0, 'yes italic (#%06x)', $color);
 
 // Test fg/bg together
 $x = 0;
+$y += 1;
 for ($r = 0x00; $r <= 0xff; $r += 0xff) {
     for ($g = 0x00; $g <= 0xff; $g += 0xff) {
         for ($b = 0x00; $b <= 0xff; $b += 0xff) {
