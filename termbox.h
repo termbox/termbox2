@@ -226,11 +226,11 @@ extern "C" { // __ffi_strip
 #define TB_INPUT_MOUSE          4
 
 /* Output modes (tb_set_output_mode) */
-#define TB_OUTPUT_CURRENT       0
-#define TB_OUTPUT_NORMAL        1
-#define TB_OUTPUT_256           2
-#define TB_OUTPUT_216           3
-#define TB_OUTPUT_GRAYSCALE     4
+#define TB_OUTPUT_CURRENT   0
+#define TB_OUTPUT_NORMAL    1
+#define TB_OUTPUT_256       2
+#define TB_OUTPUT_216       3
+#define TB_OUTPUT_GRAYSCALE 4
 #ifdef TB_OPT_TRUECOLOR
 #define TB_OUTPUT_TRUECOLOR 5
 #endif
@@ -527,10 +527,6 @@ struct tb_cell *tb_cell_buffer();
 #endif /* __TERMBOX_H */
 
 #ifdef TB_IMPL
-
-#ifndef TB_OPT_TRUECOLOR
-#define TB_OUTPUT_TRUECOLOR (-1)
-#endif
 
 #define if_err_return(rv, expr)                                                \
     if (((rv) = (expr)) != TB_OK)                                              \
@@ -1606,11 +1602,20 @@ int tb_set_input_mode(int mode) {
 
 int tb_set_output_mode(int mode) {
     if_not_init_return();
-    if (mode == TB_OUTPUT_CURRENT) {
-        return global.output_mode;
+    switch (mode) {
+        case TB_OUTPUT_CURRENT:
+            return global.output_mode;
+        case TB_OUTPUT_NORMAL:
+        case TB_OUTPUT_256:
+        case TB_OUTPUT_216:
+        case TB_OUTPUT_GRAYSCALE:
+#ifdef TB_OPT_TRUECOLOR
+        case TB_OUTPUT_TRUECOLOR:
+#endif
+            global.output_mode = mode;
+            return TB_OK;
     }
-    global.output_mode = mode;
-    return TB_OK;
+    return TB_ERR;
 }
 
 int tb_peek_event(struct tb_event *event, int timeout_ms) {
@@ -2810,20 +2815,25 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
             cbg += 0xe8;
             break;
 
+#ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
             cfg = fg;
             cbg = bg;
             break;
+#endif
     }
 
     uintattr_t attr_bold, attr_blink, attr_italic, attr_underline, attr_reverse;
+#ifdef TB_OPT_TRUECOLOR
     if (global.output_mode == TB_OUTPUT_TRUECOLOR) {
         attr_bold = TB_TRUECOLOR_BOLD;
         attr_blink = TB_TRUECOLOR_BLINK;
         attr_italic = TB_TRUECOLOR_ITALIC;
         attr_underline = TB_TRUECOLOR_UNDERLINE;
         attr_reverse = TB_TRUECOLOR_REVERSE;
-    } else {
+    } else
+#endif
+    {
         attr_bold = TB_BOLD;
         attr_blink = TB_BLINK;
         attr_italic = TB_ITALIC;
@@ -2863,9 +2873,12 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
     int rv;
     char nbuf[32];
 
-    if (global.output_mode != TB_OUTPUT_TRUECOLOR && fg == TB_DEFAULT &&
-        bg == TB_DEFAULT)
-    {
+    if (
+#ifdef TB_OPT_TRUECOLOR
+        global.output_mode != TB_OUTPUT_TRUECOLOR &&
+#endif
+        fg == TB_DEFAULT && bg == TB_DEFAULT
+    ) {
         return TB_OK;
     }
 
@@ -2905,6 +2918,7 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
             send_literal(rv, "m");
             break;
 
+#ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
             send_literal(rv, "\x1b[38;2;");
             send_num(rv, nbuf, (fg >> 16) & 0xff);
@@ -2920,6 +2934,7 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
             send_num(rv, nbuf, bg & 0xff);
             send_literal(rv, "m");
             break;
+#endif
     }
     return TB_OK;
 }
