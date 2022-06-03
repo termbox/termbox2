@@ -200,13 +200,11 @@ extern "C" { // __ffi_strip
 #define TB_REVERSE              0x0400
 #define TB_ITALIC               0x0800
 #define TB_BLINK                0x1000
-#ifdef TB_OPT_TRUECOLOR
 #define TB_TRUECOLOR_BOLD       0x01000000
 #define TB_TRUECOLOR_UNDERLINE  0x02000000
 #define TB_TRUECOLOR_REVERSE    0x04000000
 #define TB_TRUECOLOR_ITALIC     0x08000000
 #define TB_TRUECOLOR_BLINK      0x10000000
-#endif
 
 /* Event types (tb_event.type) */
 #define TB_EVENT_KEY            1
@@ -231,9 +229,7 @@ extern "C" { // __ffi_strip
 #define TB_OUTPUT_256           2
 #define TB_OUTPUT_216           3
 #define TB_OUTPUT_GRAYSCALE     4
-#ifdef TB_OPT_TRUECOLOR
-#define TB_OUTPUT_TRUECOLOR 5
-#endif
+#define TB_OUTPUT_TRUECOLOR     5
 
 /* Common function return values unless otherwise noted */
 #define TB_OK                   0
@@ -297,11 +293,7 @@ extern "C" { // __ffi_strip
 #define tb_free    free
 #endif
 
-#ifdef TB_OPT_TRUECOLOR
 typedef uint32_t uintattr_t;
-#else
-typedef uint16_t uintattr_t; // __ffi_strip
-#endif
 
 /* The terminal screen is represented as 2d array of cells. The structure is
  * optimized for dealing with single-width (wcwidth()==1) Unicode code points,
@@ -527,10 +519,6 @@ struct tb_cell *tb_cell_buffer();
 #endif /* __TERMBOX_H */
 
 #ifdef TB_IMPL
-
-#ifndef TB_OPT_TRUECOLOR
-#define TB_OUTPUT_TRUECOLOR (-1)
-#endif
 
 #define if_err_return(rv, expr)                                                \
     if (((rv) = (expr)) != TB_OK)                                              \
