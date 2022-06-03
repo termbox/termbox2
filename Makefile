@@ -36,6 +36,6 @@ install:
 	install -p -m 644 $(termbox_h) $(DESTDIR)$(prefix)/include/$(termbox_h)
 
 clean:
-	rm -f $(termbox_demos) $(termbox_o) $(termbox_so) tests/**/observed.ansi
+	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) tests/**/observed.ansi
 
 .PHONY: all terminfo test test_local install clean

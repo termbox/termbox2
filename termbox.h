@@ -201,29 +201,29 @@ extern "C" { // __ffi_strip
 #define TB_ITALIC               0x0800
 #define TB_BLINK                0x1000
 #ifdef TB_OPT_TRUECOLOR
-#define TB_TRUECOLOR_BOLD       0x01000000
-#define TB_TRUECOLOR_UNDERLINE  0x02000000
-#define TB_TRUECOLOR_REVERSE    0x04000000
-#define TB_TRUECOLOR_ITALIC     0x08000000
-#define TB_TRUECOLOR_BLINK      0x10000000
+#define TB_TRUECOLOR_BOLD      0x01000000
+#define TB_TRUECOLOR_UNDERLINE 0x02000000
+#define TB_TRUECOLOR_REVERSE   0x04000000
+#define TB_TRUECOLOR_ITALIC    0x08000000
+#define TB_TRUECOLOR_BLINK     0x10000000
 #endif
 
 /* Event types (tb_event.type) */
-#define TB_EVENT_KEY            1
-#define TB_EVENT_RESIZE         2
-#define TB_EVENT_MOUSE          3
+#define TB_EVENT_KEY        1
+#define TB_EVENT_RESIZE     2
+#define TB_EVENT_MOUSE      3
 
 /* Key modifiers (bitwise) (tb_event.mod) */
-#define TB_MOD_ALT              1
-#define TB_MOD_CTRL             2
-#define TB_MOD_SHIFT            4
-#define TB_MOD_MOTION           8
+#define TB_MOD_ALT          1
+#define TB_MOD_CTRL         2
+#define TB_MOD_SHIFT        4
+#define TB_MOD_MOTION       8
 
 /* Input modes (bitwise) (tb_set_input_mode) */
-#define TB_INPUT_CURRENT        0
-#define TB_INPUT_ESC            1
-#define TB_INPUT_ALT            2
-#define TB_INPUT_MOUSE          4
+#define TB_INPUT_CURRENT    0
+#define TB_INPUT_ESC        1
+#define TB_INPUT_ALT        2
+#define TB_INPUT_MOUSE      4
 
 /* Output modes (tb_set_output_mode) */
 #define TB_OUTPUT_CURRENT   0
@@ -615,7 +615,7 @@ struct tb_global_t {
     int (*fn_extract_esc_post)(struct tb_event *, size_t *);
 };
 
-struct tb_global_t global = {0};
+static struct tb_global_t global = {0};
 
 /* BEGIN codegen c */
 /* Produced by ./codegen.sh on Sun, 19 Sep 2021 01:02:03 +0000 */
@@ -1487,7 +1487,8 @@ int tb_present() {
                         struct tb_cell *front_wide;
                         if_err_return(rv,
                             cellbuf_get(&global.front, x + i, y, &front_wide));
-                        cell_set(front_wide, 0, 1, back->fg, back->bg);
+                        if_err_return(rv,
+                            cell_set(front_wide, 0, 1, back->fg, back->bg));
                     }
                 }
             }
@@ -2842,12 +2843,10 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
     }
 
     if (fg & attr_bold)
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
+        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
 
     if (fg & attr_blink)
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
+        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
 
     if (fg & attr_underline)
         if_err_return(rv,
@@ -2877,8 +2876,8 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
 #ifdef TB_OPT_TRUECOLOR
         global.output_mode != TB_OUTPUT_TRUECOLOR &&
 #endif
-        fg == TB_DEFAULT && bg == TB_DEFAULT
-    ) {
+        fg == TB_DEFAULT && bg == TB_DEFAULT)
+    {
         return TB_OK;
     }
 
@@ -3027,7 +3026,8 @@ static int cell_set(struct tb_cell *cell, uint32_t *ch, size_t nch,
     if (nch <= 1) {
         cell->nech = 0;
     } else {
-        cell_reserve_ech(cell, nch + 1);
+        int rv;
+        if_err_return(rv, cell_reserve_ech(cell, nch + 1));
         memcpy(cell->ech, ch, nch);
         cell->ech[nch] = '\0';
         cell->nech = nch;
@@ -3090,10 +3090,11 @@ static int cellbuf_free(struct cellbuf_t *c) {
 }
 
 static int cellbuf_clear(struct cellbuf_t *c) {
-    int i;
+    int rv, i;
     uint32_t space = (uint32_t)' ';
     for (i = 0; i < c->width * c->height; i++) {
-        cell_set(&c->cells[i], &space, 1, global.fg, global.bg);
+        if_err_return(rv,
+            cell_set(&c->cells[i], &space, 1, global.fg, global.bg));
     }
     return TB_OK;
 }
