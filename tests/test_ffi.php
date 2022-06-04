@@ -13,22 +13,29 @@ $test = new class() {
     }
 
     private function makeFfi(): object {
+        // This is a little whacky. `FFI::cdef` isn't smart enough to handle
+        // preprocessor directives, so we feed it a `gcc -E` version of
+        // termbox.h (termbox.ffi.h, created by the Makefile). On the other
+        // hand, it's useful to have `#define` constants for tests, so we parse
+        // those out from the raw  `termbox.h`.
         $repo_dir = dirname(__DIR__);
         $termbox_h = "$repo_dir/termbox.h";
+        $termbox_ffi_h = "$repo_dir/termbox.ffi.h";
         $libtermbox_so = "$repo_dir/libtermbox.so";
-        $header_data_and_impl = file_get_contents($termbox_h);
+        $termbox_h_data = file_get_contents($termbox_h);
 
+        // Look at only the content in between `__TERMBOX_H`
         $matches = [];
         preg_match(
             '@#define __TERMBOX_H\n(.*?)#endif /\* __TERMBOX_H \*/@sm',
-            $header_data_and_impl,
+            $termbox_h_data,
             $matches
         );
-        $header_data = $matches[1] ?? '';
+        $termbox_h_data = $matches[1] ?? '';
 
         // Extract #define values
         $matches = [];
-        preg_match_all('/^#define\s+(TB_\S+)\s+(.+)$/m', $header_data, $matches, PREG_SET_ORDER);
+        preg_match_all('/^#define\s+(TB_\S+)\s+(.+)$/m', $termbox_h_data, $matches, PREG_SET_ORDER);
         foreach ($matches as $match) {
             $define_name = $match[1];
             $define_value = $match[2];
@@ -47,8 +54,8 @@ $test = new class() {
         }
 
         // Make FFI
-        $header_data = preg_replace('/^.*__ffi_strip.*$/m', '', $header_data);
-        $ffi = FFI::cdef($header_data, $libtermbox_so);
+        $termbox_ffi_h_data = file_get_contents($termbox_ffi_h);
+        $ffi = FFI::cdef($termbox_ffi_h_data, $libtermbox_so);
 
         // Return wrapper that logs FFI calls
         return new class($ffi, $this) {
@@ -95,6 +102,11 @@ $test = new class() {
 
     public function screencap(): void {
         $this->log('screencap');
+        sleep(PHP_INT_MAX);
+    }
+
+    public function skip(): void {
+        $this->log('skip');
         sleep(PHP_INT_MAX);
     }
 };

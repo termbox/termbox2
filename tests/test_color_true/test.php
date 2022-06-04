@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+if (!$test->ffi->tb_has_truecolor()) {
+    // This will only work with truecolor support
+    $test->skip();
+}
+
 $css_colors = [
     'aliceblue'            => 0xf0f8ff,
     'antiquewhite'         => 0xfaebd7,
