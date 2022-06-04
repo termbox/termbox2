@@ -67,14 +67,16 @@ main() {
         local test_log_cursor=0
         local test_log_size=0
         local test_end_ts=$(($(date +%s) + $timeout_s))
+        local test_skipped=0
         while true; do
-            test_log_size=$(stat --format=%s $test_log_cmd 2>/dev/null)
+            test_log_size=$(stat -c %s $test_log_cmd 2>/dev/null)
             [ -z "$test_log_size" ] && break # stat failed or deleted
             [ "$test_log_size" -lt "$test_log_cursor" ] && break # truncated
             local test_log_content=$(tail -c "+$test_log_cursor" $test_log_cmd | \
                 head -c "$((test_log_size-test_log_cursor))")
             test_log_cursor=$test_log_size
             echo -n "$test_log_content"
+            grep -q 'skip'      <<<"$test_log_content" && test_skipped=1 && break
             grep -q 'screencap' <<<"$test_log_content" && break
             sleep 0.1
             if [ "$(date +%s)" -ge "$test_end_ts" ]; then
@@ -84,20 +86,24 @@ main() {
         done
         echo
 
-        # take screencap
-        # xwd -root -display $x_display -out $test_dir/observed.xwd # graphical
-        rm -f $test_dir/observed.*
-        DISPLAY=$x_display xvkbd -window xterm -text '\S\[Home]' &>/dev/null # ansi
-        local test_log_xterm_count=$(ls -1 ${test_log_xterm}* 2>/dev/null | wc -l)
-        [ "$test_log_xterm_count" -eq 1 ] && cp ${test_log_xterm}* $test_dir/observed.ansi
+        if [ "$test_skipped" -ne 1 ]; then
+            # take screencap
+            # xwd -root -display $x_display -out $test_dir/observed.xwd # graphical
+            rm -f $test_dir/observed.*
+            DISPLAY=$x_display xvkbd -window xterm -text '\S\[Home]' &>/dev/null # ansi
+            local test_log_xterm_count=$(ls -1 ${test_log_xterm}* 2>/dev/null | wc -l)
+            [ "$test_log_xterm_count" -eq 1 ] && cp ${test_log_xterm}* $test_dir/observed.ansi
 
-        # diff screencap
-        # convert $test_dir/expected.xwd $test_dir/observed.gif
-        diff $test_dir/expected.ansi $test_dir/observed.ansi &>/dev/null
-        diff_ec=$?
+            # diff screencap
+            # convert $test_dir/expected.xwd $test_dir/observed.gif
+            diff $test_dir/expected.ansi $test_dir/observed.ansi &>/dev/null
+            diff_ec=$?
+        fi
 
         # print result
-        if [ "$diff_ec" -eq 0 ]; then
+        if [ "$test_skipped" -eq 1 ]; then
+            echo -e "\x1b[1m$test_name\x1b[0m: \x1b[33mSKIP\x1b[0m"
+        elif [ "$diff_ec" -eq 0 ]; then
             echo -e "\x1b[1m$test_name\x1b[0m: \x1b[32mOK\x1b[0m"
         else
             echo

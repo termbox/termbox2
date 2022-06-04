@@ -57,7 +57,7 @@ SOFTWARE.
 #include <wchar.h>
 
 #ifdef __cplusplus
-extern "C" { // __ffi_strip
+extern "C" {
 #endif
 
 /* ASCII key constants (tb_event.key) */
@@ -297,10 +297,12 @@ extern "C" { // __ffi_strip
 #define tb_free    free
 #endif
 
+// __ffi_start
+
 #ifdef TB_OPT_TRUECOLOR
 typedef uint32_t uintattr_t;
 #else
-typedef uint16_t uintattr_t; // __ffi_strip
+typedef uint16_t uintattr_t;
 #endif
 
 /* The terminal screen is represented as 2d array of cells. The structure is
@@ -517,11 +519,12 @@ int tb_utf8_char_to_unicode(uint32_t *out, const char *c);
 int tb_utf8_unicode_to_char(char *out, uint32_t c);
 int tb_last_errno();
 const char *tb_strerror(int err);
-
 struct tb_cell *tb_cell_buffer();
+int tb_has_truecolor();
+int tb_has_egc();
 
 #ifdef __cplusplus
-} // __ffi_strip
+}
 #endif
 
 #endif /* __TERMBOX_H */
@@ -1824,6 +1827,22 @@ const char *tb_strerror(int err) {
         default:
             return strerror(global.last_errno);
     }
+}
+
+int tb_has_truecolor() {
+#ifdef TB_OPT_TRUECOLOR
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+int tb_has_egc() {
+#ifdef TB_OPT_EGC
+    return 1;
+#else
+    return 0;
+#endif
 }
 
 static int tb_reset() {

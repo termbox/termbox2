@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+if (!$test->ffi->tb_has_egc()) {
+    // This will only work with extended grapheme cluster support
+    $test->skip();
+}
+
 $test->ffi->tb_init();
 
 $test->ffi->tb_print(0, 0, 0, 0, "STARG\xce\x9b\xcc\x8aTE SG-1");
