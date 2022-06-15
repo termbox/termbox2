@@ -36,22 +36,18 @@ SOFTWARE.
 
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#if !TB_OPT_SELECT
-#include <poll.h>
-#else
-#include <sys/select.h>
-#endif
-#include <limits.h>
-#include <signal.h>
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
@@ -472,7 +468,7 @@ int tb_set_output_mode(int mode);
 
 /* Wait for an event up to timeout_ms milliseconds and fill the event structure
  * with it. If no event is available within the timeout period, TB_ERR_NO_EVENT
- * is returned. On a resize event, the underlying poll(2) call may be
+ * is returned. On a resize event, the underlying select(2) call may be
  * interrupted, yielding a return code of TB_ERR_POLL. In this case, you may
  * check errno via tb_last_errno(). If it's EINTR, you can safely ignore that
  * and call tb_peek_event() again.
@@ -2101,10 +2097,6 @@ static int update_term_size_via_esc() {
         return TB_ERR_RESIZE_WRITE;
     }
 
-#if !TB_OPT_SELECT
-    struct pollfd fd = {.fd = global.rfd, .events = POLLIN};
-    int poll_rv = poll(&fd, 1, TB_RESIZE_FALLBACK_MS);
-#else
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(global.rfd, &fds);
@@ -2113,10 +2105,9 @@ static int update_term_size_via_esc() {
     timeout.tv_sec = 0;
     timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
 
-    int poll_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
-#endif
+    int select_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
 
-    if (poll_rv != 1) {
+    if (select_rv != 1) {
         global.last_errno = errno;
         return TB_ERR_RESIZE_POLL;
     }
@@ -2407,22 +2398,12 @@ static int wait_event(struct tb_event *event, int timeout) {
     memset(event, 0, sizeof(*event));
     if_ok_return(rv, extract_event(event));
 
-#if !TB_OPT_SELECT
-    struct pollfd fds[2] = {
-        {.fd = global.rfd,              .events = POLLIN},
-        {.fd = global.resize_pipefd[0], .events = POLLIN}
-    };
-#else
     fd_set fds;
     struct timeval tv;
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
-#endif
 
     do {
-#if !TB_OPT_SELECT
-        int poll_rv = poll(fds, 2, timeout);
-#else
         FD_ZERO(&fds);
         FD_SET(global.rfd, &fds);
         FD_SET(global.resize_pipefd[0], &fds);
@@ -2431,25 +2412,19 @@ static int wait_event(struct tb_event *event, int timeout) {
                         ? global.resize_pipefd[0]
                         : global.rfd;
 
-        int poll_rv =
+        int select_rv =
             select(maxfd + 1, &fds, NULL, NULL, (timeout < 0) ? NULL : &tv);
-#endif
 
-        if (poll_rv < 0) {
+        if (select_rv < 0) {
             // Let EINTR/EAGAIN bubble up
             global.last_errno = errno;
             return TB_ERR_POLL;
-        } else if (poll_rv == 0) {
+        } else if (select_rv == 0) {
             return TB_ERR_NO_EVENT;
         }
 
-#if !TB_OPT_SELECT
-        int tty_has_events = (fds[0].revents & POLLIN);
-        int resize_has_events = (fds[1].revents & POLLIN);
-#else
         int tty_has_events = (FD_ISSET(global.rfd, &fds));
         int resize_has_events = (FD_ISSET(global.resize_pipefd[0], &fds));
-#endif
 
         if (tty_has_events) {
             ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
