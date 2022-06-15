@@ -34,8 +34,14 @@ SOFTWARE.
 #define _DEFAULT_SOURCE
 #endif
 
+#ifdef __APPLE__ /* MacOS has a broken poll() implementation. */
+#define TB_OPT_SELECT
+#endif
+
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -45,13 +51,6 @@ SOFTWARE.
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#if !TB_OPT_SELECT
-#include <poll.h>
-#else
-#include <sys/select.h>
-#endif
-#include <limits.h>
-#include <signal.h>
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
@@ -530,6 +529,28 @@ int tb_has_egc();
 #endif /* __TERMBOX_H */
 
 #ifdef TB_IMPL
+
+#ifdef TB_OPT_SELECT
+#include <sys/select.h>
+
+/* Arbritary values copied from Linux kernel headers. These don't need to be
+ * portable as they're just used as boolean flags by our select() wrapper and
+ * not passed to any libc functions. */
+#define POLLIN     0x0001
+#define POLLPRI    0x0002
+#define POLLOUT    0x0004
+#define POLLRDNORM 0x0040
+#define POLLRDBAND 0x0080
+#define POLLWRNORM 0x0100
+
+struct pollfd {
+    int fd;
+    short events;
+    short revents;
+};
+#else
+#include <poll.h>
+#endif
 
 #define if_err_return(rv, expr)                                                \
     if (((rv) = (expr)) != TB_OK)                                              \
@@ -1359,6 +1380,7 @@ static int bytebuf_shift(struct bytebuf_t *b, size_t n);
 static int bytebuf_flush(struct bytebuf_t *b, int fd);
 static int bytebuf_reserve(struct bytebuf_t *b, size_t sz);
 static int bytebuf_free(struct bytebuf_t *b);
+static int sane_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms);
 
 int tb_init() {
     return tb_init_file("/dev/tty");
@@ -2101,20 +2123,8 @@ static int update_term_size_via_esc() {
         return TB_ERR_RESIZE_WRITE;
     }
 
-#if !TB_OPT_SELECT
     struct pollfd fd = {.fd = global.rfd, .events = POLLIN};
-    int poll_rv = poll(&fd, 1, TB_RESIZE_FALLBACK_MS);
-#else
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(global.rfd, &fds);
-
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
-
-    int poll_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
-#endif
+    int poll_rv = sane_poll(&fd, 1, TB_RESIZE_FALLBACK_MS);
 
     if (poll_rv != 1) {
         global.last_errno = errno;
@@ -2407,33 +2417,13 @@ static int wait_event(struct tb_event *event, int timeout) {
     memset(event, 0, sizeof(*event));
     if_ok_return(rv, extract_event(event));
 
-#if !TB_OPT_SELECT
     struct pollfd fds[2] = {
         {.fd = global.rfd,              .events = POLLIN},
         {.fd = global.resize_pipefd[0], .events = POLLIN}
     };
-#else
-    fd_set fds;
-    struct timeval tv;
-    tv.tv_sec = timeout / 1000;
-    tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
-#endif
 
     do {
-#if !TB_OPT_SELECT
-        int poll_rv = poll(fds, 2, timeout);
-#else
-        FD_ZERO(&fds);
-        FD_SET(global.rfd, &fds);
-        FD_SET(global.resize_pipefd[0], &fds);
-
-        int maxfd = global.resize_pipefd[0] > global.rfd
-                        ? global.resize_pipefd[0]
-                        : global.rfd;
-
-        int poll_rv =
-            select(maxfd + 1, &fds, NULL, NULL, (timeout < 0) ? NULL : &tv);
-#endif
+        int poll_rv = sane_poll(fds, 2, timeout);
 
         if (poll_rv < 0) {
             // Let EINTR/EAGAIN bubble up
@@ -2443,13 +2433,8 @@ static int wait_event(struct tb_event *event, int timeout) {
             return TB_ERR_NO_EVENT;
         }
 
-#if !TB_OPT_SELECT
         int tty_has_events = (fds[0].revents & POLLIN);
         int resize_has_events = (fds[1].revents & POLLIN);
-#else
-        int tty_has_events = (FD_ISSET(global.rfd, &fds));
-        int resize_has_events = (FD_ISSET(global.resize_pipefd[0], &fds));
-#endif
 
         if (tty_has_events) {
             ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
@@ -3231,4 +3216,109 @@ static int bytebuf_free(struct bytebuf_t *b) {
     return TB_OK;
 }
 
+#ifdef TB_OPT_SELECT
+static int verify_sock(int s) {
+    if (s < 0 || s >= FD_SETSIZE) {
+        errno = EINVAL;
+        return -1;
+    }
+    return s;
+}
+
+static int sane_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms) {
+    struct timeval pending_tv;
+    struct timeval *ptimeout;
+    fd_set fds_read;
+    fd_set fds_write;
+    fd_set fds_err;
+    int maxfd;
+
+    struct timeval initial_tv = {0, 0};
+    unsigned int i;
+    int pending_ms = 0;
+    int r;
+
+    /* Avoid initial timestamp, avoid tvnow() call, when elapsed
+     * time in this function does not need to be measured. This happens
+     * when function is called with a zero timeout or a negative timeout
+     * value indicating a blocking call should be performed. */
+
+    if (timeout_ms > 0) {
+        pending_ms = timeout_ms;
+        gettimeofday(&initial_tv, NULL);
+    }
+
+    FD_ZERO(&fds_read);
+    FD_ZERO(&fds_write);
+    FD_ZERO(&fds_err);
+    maxfd = (int)-1;
+
+    for (i = 0; i < nfds; i++) {
+        ufds[i].revents = 0;
+        if (ufds[i].fd == -1)
+            continue;
+        ufds[i].fd = verify_sock(ufds[i].fd);
+        if (ufds[i].events &
+            (POLLIN | POLLOUT | POLLPRI | POLLRDNORM | POLLWRNORM | POLLRDBAND))
+        {
+            if (ufds[i].fd > maxfd)
+                maxfd = ufds[i].fd;
+            if (ufds[i].events & (POLLRDNORM | POLLIN))
+                FD_SET(ufds[i].fd, &fds_read);
+            if (ufds[i].events & (POLLWRNORM | POLLOUT))
+                FD_SET(ufds[i].fd, &fds_write);
+            if (ufds[i].events & (POLLRDBAND | POLLPRI))
+                FD_SET(ufds[i].fd, &fds_err);
+        }
+    }
+
+    ptimeout = (timeout_ms < 0) ? NULL : &pending_tv;
+
+    if (timeout_ms > 0) {
+        pending_tv.tv_sec = pending_ms / 1000;
+        pending_tv.tv_usec = (pending_ms % 1000) * 1000;
+    } else if (!timeout_ms) {
+        pending_tv.tv_sec = 0;
+        pending_tv.tv_usec = 0;
+    }
+    r = select((int)maxfd + 1, &fds_read, &fds_write, &fds_err, ptimeout);
+    if (r < 0)
+        return -1;
+    if (r == 0)
+        return 0;
+    r = 0;
+    for (i = 0; i < nfds; i++) {
+        ufds[i].revents = 0;
+        if (ufds[i].fd == -1)
+            continue;
+        if (FD_ISSET(ufds[i].fd, &fds_read))
+            ufds[i].revents |= POLLIN;
+        if (FD_ISSET(ufds[i].fd, &fds_write))
+            ufds[i].revents |= POLLOUT;
+        if (FD_ISSET(ufds[i].fd, &fds_err))
+            ufds[i].revents |= POLLPRI;
+        if (ufds[i].revents != 0)
+            r++;
+    }
+    return r;
+}
+#else
+/*
+ * This is a wrapper around poll().  If poll() does not exist, then
+ * select() is used instead.  An error is returned if select() is
+ * being used and a file descriptor is too large for FD_SETSIZE.
+ * A negative timeout value makes this function wait indefinitely,
+ * unles no valid file descriptor is given, when this happens the
+ * negative timeout is ignored and the function times out immediately.
+ *
+ * Return values:
+ *   -1 = system call error or fd >= FD_SETSIZE
+ *    0 = timeout
+ *    N = number of structures with non zero revent fields
+ */
+
+static int sane_poll(struct pollfd ufds[], unsigned int nfds, int timeout_ms) {
+    return poll(ufds, nfds, timeout_ms);
+}
+#endif
 #endif /* TB_IMPL */
