@@ -8,6 +8,8 @@ color, extended grapheme clusters, test suite). termbox2 is organized as a
 single file header library, though it is possible to compile it as a
 stand-alone shared or static library.
 
+![keyboard demo](demo/keyboard.gif)
+
 ### Synopsis
 
 ```c
