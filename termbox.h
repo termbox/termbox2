@@ -231,7 +231,12 @@ extern "C" {
 #define TB_OUTPUT_TRUECOLOR 5
 #endif
 
-/* Common function return values unless otherwise noted */
+/* Common function return values unless otherwise noted.
+ *
+ * Library behavior is undefined after receiving TB_ERR_MEM. Callers may
+ * attempt reinitializing by freeing memory, invoking tb_shutdown, then
+ * tb_init.
+ */
 #define TB_OK                   0
 #define TB_ERR                  -1
 #define TB_ERR_NEED_MORE        -2
@@ -609,7 +614,6 @@ struct tb_global_t {
     int has_orig_tios;
     int last_errno;
     int initialized;
-    int need_resize;
     int (*fn_extract_esc_pre)(struct tb_event *, size_t *);
     int (*fn_extract_esc_post)(struct tb_event *, size_t *);
 };
@@ -1330,7 +1334,7 @@ static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
 static int extract_esc_cap(struct tb_event *event);
 static int extract_esc_mouse(struct tb_event *event);
-static int resize_if_needed();
+static int resize_cellbufs();
 static void handle_resize(int sig);
 static int send_attr(uintattr_t fg, uintattr_t bg);
 static int send_sgr(uintattr_t fg, uintattr_t bg);
@@ -1421,9 +1425,7 @@ int tb_height() {
 }
 
 int tb_clear() {
-    int rv;
     if_not_init_return();
-    if_err_return(rv, resize_if_needed());
     return cellbuf_clear(&global.back);
 }
 
@@ -1438,7 +1440,6 @@ int tb_present() {
     if_not_init_return();
 
     int rv;
-    if_err_return(rv, resize_if_needed());
 
     // TODO Assert global.back.(width,height) == global.front.(width,height)
 
@@ -2061,7 +2062,7 @@ static int send_clear() {
 }
 
 static int update_term_size() {
-    int rv;
+    int rv, ioctl_errno;
 
     if (global.ttyfd < 0) {
         return TB_OK;
@@ -2070,18 +2071,18 @@ static int update_term_size() {
     struct winsize sz;
     memset(&sz, 0, sizeof(sz));
 
+    // Try ioctl TIOCGWINSZ
     if (ioctl(global.ttyfd, TIOCGWINSZ, &sz) == 0) {
         global.width = sz.ws_col;
         global.height = sz.ws_row;
         return TB_OK;
     }
+    ioctl_errno = errno;
 
-    // If TB_RESIZE_FALLBACK deinfed, try >cursor(9999,9999), >u7, <u6
-    //#ifdef TB_RESIZE_FALLBACK
+    // Try >cursor(9999,9999), >u7, <u6
     if_ok_return(rv, update_term_size_via_esc());
-    //#endif
 
-    global.last_errno = errno;
+    global.last_errno = ioctl_errno;
     return TB_ERR_RESIZE_IOCTL;
 }
 
@@ -2440,10 +2441,10 @@ static int wait_event(struct tb_event *event, int timeout) {
             int ignore = 0;
             read(global.resize_pipefd[0], &ignore, sizeof(ignore));
             if_err_return(rv, update_term_size());
+            if_err_return(rv, resize_cellbufs());
             event->type = TB_EVENT_RESIZE;
             event->w = global.width;
             event->h = global.height;
-            global.need_resize = 1;
             return TB_OK;
         }
 
@@ -2744,19 +2745,14 @@ static int extract_esc_mouse(struct tb_event *event) {
     return ret;
 }
 
-static int resize_if_needed() {
+static int resize_cellbufs() {
     int rv;
-    if (!global.need_resize) {
-        return TB_OK;
-    }
-    if_err_return(rv, update_term_size()); // TODO is this needed?
     if_err_return(rv,
         cellbuf_resize(&global.back, global.width, global.height));
     if_err_return(rv,
         cellbuf_resize(&global.front, global.width, global.height));
     if_err_return(rv, cellbuf_clear(&global.front));
     if_err_return(rv, send_clear());
-    global.need_resize = 0;
     return TB_OK;
 }
 
