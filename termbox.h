@@ -2448,6 +2448,7 @@ static int wait_event(struct tb_event *event, int timeout) {
         if (resize_has_events) {
             int ignore = 0;
             read(global.resize_pipefd[0], &ignore, sizeof(ignore));
+            // TODO Harden against errors encountered mid-resize
             if_err_return(rv, update_term_size());
             if_err_return(rv, resize_cellbufs());
             event->type = TB_EVENT_RESIZE;
