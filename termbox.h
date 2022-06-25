@@ -407,9 +407,11 @@ int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
 int tb_extend_cell(int x, int y, uint32_t ch);
 
 /* Sets the input mode. Termbox has two input modes:
+ *
  * 1. TB_INPUT_ESC
  *    When escape (\x1b) is in the buffer and there's no match for an escape
  *    sequence, a key event for TB_KEY_ESC is returned.
+ *
  * 2. TB_INPUT_ALT
  *    When escape (\x1b) is in the buffer and there's no match for an escape
  *    sequence, the next keyboard event is returned with a TB_MOD_ALT modifier.
@@ -428,6 +430,7 @@ int tb_extend_cell(int x, int y, uint32_t ch);
 int tb_set_input_mode(int mode);
 
 /* Sets the termbox output mode. Termbox has three output modes:
+ *
  * 1. TB_OUTPUT_NORMAL     => [1..8]
  *    This mode provides 8 different colors:
  *      TB_BLACK, TB_RED, TB_GREEN, TB_YELLOW,
@@ -468,6 +471,11 @@ int tb_set_input_mode(int mode);
  * If mode is TB_OUTPUT_CURRENT, the function returns the current output mode.
  *
  * The default output mode is TB_OUTPUT_NORMAL.
+ *
+ * Note, not all terminals support all output modes, especially beyond
+ * TB_OUTPUT_NORMAL. There is also no very reliable way to determine color
+ * support dynamically. If portability is desired, callers are recommended to
+ * use TB_OUTPUT_NORMAL or make output mode end-user configurable.
  */
 int tb_set_output_mode(int mode);
 
