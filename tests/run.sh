@@ -59,7 +59,7 @@ main() {
             -xrm 'xterm*printOptsImmediate:1' \
             -xrm 'xterm*printModeImmediate:2' \
             -xrm "xterm*printFileImmediate:$test_log_xterm" \
-            -e "php -d auto_prepend_file=$this_dir/test_ffi.php $test_php $test_log_cmd &>$test_log_php" \
+            -e "php -d auto_prepend_file=$this_dir/test_prepend.php $test_php $test_log_cmd &>$test_log_php" \
             &>/dev/null &
         local xterm_pid=$!
 
