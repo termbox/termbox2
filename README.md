@@ -80,6 +80,11 @@ As mentioned above, there are two options:
 2. Build termbox2 as a library (either `make libtermbox.so` or
    `make libtermbox.a`) and link as normal.
 
+### Language bindings (FFI and ABI compats)
+
+Basic examples in PHP, Python, Ruby, Go, and Zig are in the `demo/` directory.
+(Feel free to submit PRs for other languages.)
+
 ### Examples
 
 * [mle][2] - flexible terminal-based text editor
