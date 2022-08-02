@@ -2,13 +2,25 @@ prefix?=/usr/local
 
 termbox_cflags:=-std=c99 -Wall -Wextra -pedantic -Wno-unused-result -g -O0 -D_XOPEN_SOURCE -D_DEFAULT_SOURCE $(CFLAGS)
 termbox_demos:=$(patsubst demo/%.c,demo/%,$(wildcard demo/*.c))
-termbox_so:=libtermbox.so
-termbox_a:=libtermbox.a
-termbox_o:=termbox.o
 termbox_h:=termbox.h
 termbox_ffi_h:=termbox.ffi.h
+termbox_o:=termbox.o
+termbox_so_version_abi:=2
+termbox_so_version_minor_patch:=0.0
+termbox_so:=libtermbox.so
+termbox_so_x:=$(termbox_so).$(termbox_so_version_abi)
+termbox_so_x_y_z:=$(termbox_so_x).$(termbox_so_version_minor_patch)
+termbox_ld_soname:=soname
+termbox_a:=libtermbox.a
 
-all: $(termbox_demos)
+ifeq ($(shell $(CC) -dumpmachine | grep -q apple && echo 1), 1)
+    termbox_so:=libtermbox.dylib
+    termbox_so_x:=libtermbox.$(termbox_so_version_abi).dylib
+    termbox_so_x_y_z:=libtermbox.$(termbox_so_version_abi).$(termbox_so_version_minor_patch).dylib
+    termbox_ld_soname:=install_name
+endif
+
+all: $(termbox_demos) $(termbox_so) $(termbox_a)
 
 $(termbox_demos): %: %.c
 	$(CC) -DTB_OPT_TRUECOLOR -DTB_OPT_EGC $(termbox_cflags) $^ -o $@
@@ -16,8 +28,11 @@ $(termbox_demos): %: %.c
 $(termbox_o): $(termbox_h)
 	$(CC) -DTB_IMPL -DTB_OPT_TRUECOLOR -DTB_OPT_EGC -fPIC -xc -c $(termbox_cflags) $(termbox_h) -o $@
 
-$(termbox_so): $(termbox_o)
-	$(CC) -shared $(termbox_o) -o $@
+$(termbox_so_x_y_z): $(termbox_o)
+	$(CC) -shared -Wl,-$(termbox_ld_soname),$(termbox_so_x) $(termbox_o) -o $@
+
+$(termbox_so): $(termbox_so_x_y_z)
+	ln -sf $(termbox_so_x_y_z) $@
 
 $(termbox_a): $(termbox_o)
 	$(AR) rcs $@ $(termbox_o)
@@ -36,10 +51,23 @@ test_local: $(termbox_so) $(termbox_ffi_h)
 	./tests/run.sh
 
 install:
+	$(MAKE) install_h
+
+install_h: $(termbox_h)
 	install -d $(DESTDIR)$(prefix)/include
 	install -p -m 644 $(termbox_h) $(DESTDIR)$(prefix)/include/$(termbox_h)
 
-clean:
-	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_ffi_h) tests/**/observed.ansi
+install_a: $(termbox_a)
+	install -d $(DESTDIR)$(prefix)/lib
+	install -p -m 644 $(termbox_a) $(DESTDIR)$(prefix)/lib/$(termbox_a)
 
-.PHONY: all terminfo test test_local install clean
+install_so: $(termbox_so_x_y_z)
+	install -d $(DESTDIR)$(prefix)/lib
+	install -p -m 755 $(termbox_so_x_y_z) $(DESTDIR)$(prefix)/lib/$(termbox_so_x_y_z)
+	ln -sf $(termbox_so_x_y_z) $(DESTDIR)$(prefix)/lib/$(termbox_so_x)
+	ln -sf $(termbox_so_x_y_z) $(DESTDIR)$(prefix)/lib/$(termbox_so)
+
+clean:
+	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x_y_z) $(termbox_ffi_h) tests/**/observed.ansi
+
+.PHONY: all terminfo test test_local install install_h install_a install_so clean
