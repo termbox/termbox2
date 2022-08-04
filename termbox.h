@@ -56,6 +56,18 @@ SOFTWARE.
 extern "C" {
 #endif
 
+// __ffi_start
+
+#if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
+// Ensure consistent compile-time options when using as a library
+#undef TB_OPT_TRUECOLOR
+#undef TB_OPT_EGC
+#undef TB_OPT_PRINTF_BUF
+#undef TB_OPT_READ_BUF
+#define TB_OPT_TRUECOLOR
+#define TB_OPT_EGC
+#endif
+
 /* ASCII key constants (tb_event.key) */
 #define TB_KEY_CTRL_TILDE       0x00
 #define TB_KEY_CTRL_2           0x00 /* clash with 'CTRL_TILDE'     */
@@ -297,8 +309,6 @@ extern "C" {
 #define tb_realloc realloc
 #define tb_free    free
 #endif
-
-// __ffi_start
 
 #ifdef TB_OPT_TRUECOLOR
 typedef uint32_t uintattr_t;

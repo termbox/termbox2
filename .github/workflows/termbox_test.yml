@@ -5,6 +5,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - run:                             make clean test
-      - run: CFLAGS='-UTB_OPT_TRUECOLOR' make clean test # non-truecolor
-      - run: CFLAGS='-UTB_OPT_EGC'       make clean test # non-egc
+      - run:                        make clean test
+      - run: CFLAGS='-UTB_LIB_OPTS' make clean test # non-egc, non-truecolor
