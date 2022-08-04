@@ -2,4 +2,5 @@ termbox.o
 libtermbox.a
 libtermbox.so*
 termbox.ffi.h
+termbox.h.lib
 demo/keyboard

@@ -2,7 +2,6 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
-#define TB_IMPL
 #include "../termbox.h"
 
 struct key {
