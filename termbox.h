@@ -667,6 +667,7 @@ struct tb_global_t {
     int initialized;
     int (*fn_extract_esc_pre)(struct tb_event *, size_t *);
     int (*fn_extract_esc_post)(struct tb_event *, size_t *);
+    char errbuf[1024];
 };
 
 static struct tb_global_t global = {0};
@@ -1874,7 +1875,8 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_POLL:
         case TB_ERR_RESIZE_READ:
         default:
-            return strerror(global.last_errno);
+            strerror_r(global.last_errno, global.errbuf, sizeof(global.errbuf));
+            return (const char *)global.errbuf;
     }
 }
 
