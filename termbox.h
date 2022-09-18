@@ -2,7 +2,7 @@
 MIT License
 
 Copyright (c) 2010-2020 nsf <no.smile.face@gmail.com>
-              2015-2021 Adam Saponara <as@php.net>
+              2015-2022 Adam Saponara <as@php.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -57,6 +57,8 @@ extern "C" {
 #endif
 
 // __ffi_start
+
+#define TB_VERSION_STR "2.0.0"
 
 #if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
 // Ensure consistent compile-time options when using as a library
@@ -541,6 +543,7 @@ const char *tb_strerror(int err);
 struct tb_cell *tb_cell_buffer();
 int tb_has_truecolor();
 int tb_has_egc();
+const char *tb_version();
 
 #ifdef __cplusplus
 }
@@ -1858,6 +1861,10 @@ int tb_has_egc() {
 #else
     return 0;
 #endif
+}
+
+const char *tb_version() {
+    return TB_VERSION_STR;
 }
 
 static int tb_reset() {

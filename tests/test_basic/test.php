@@ -12,6 +12,7 @@ $green = $test->defines['TB_GREEN'];
 $blue = $test->defines['TB_BLUE'];
 
 $y = 0;
+$test->ffi->tb_printf(0, $y++, 0, 0, "version=%s", $test->ffi->tb_version());
 $test->ffi->tb_printf(0, $y++, $red, $bg, "width=%d", $w);
 $test->ffi->tb_printf(0, $y++, $green, $bg, "height=%d", $h);
 foreach (['TB_BOLD', 'TB_UNDERLINE', 'TB_ITALIC', 'TB_REVERSE'] as $attr) {
