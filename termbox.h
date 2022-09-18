@@ -342,8 +342,8 @@ typedef uint16_t uintattr_t;
  */
 struct tb_cell {
     uint32_t ch;   /* a Unicode character */
-    uintattr_t fg; /* bit-wise foreground attributes */
-    uintattr_t bg; /* bit-wise background attributes */
+    uintattr_t fg; /* bitwise foreground attributes */
+    uintattr_t bg; /* bitwise background attributes */
 #ifdef TB_OPT_EGC
     uint32_t *ech; /* a grapheme cluster of Unicode code points */
     size_t nech;   /* length in bytes of ech, 0 means use ch instead of ech */
@@ -366,7 +366,7 @@ struct tb_cell {
  */
 struct tb_event {
     uint8_t type; /* one of TB_EVENT_* constants */
-    uint8_t mod;  /* bit-wise TB_MOD_* constants */
+    uint8_t mod;  /* bitwise TB_MOD_* constants */
     uint16_t key; /* one of TB_KEY_* constants */
     uint32_t ch;  /* a Unicode code point */
     int32_t w;    /* resize width */
@@ -447,7 +447,7 @@ int tb_extend_cell(int x, int y, uint32_t ch);
  */
 int tb_set_input_mode(int mode);
 
-/* Sets the termbox output mode. Termbox has three output modes:
+/* Sets the termbox output mode. Termbox has multiple output modes:
  *
  * 1. TB_OUTPUT_NORMAL     => [0..8]
  *
