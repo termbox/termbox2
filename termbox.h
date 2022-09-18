@@ -58,7 +58,7 @@ extern "C" {
 
 // __ffi_start
 
-#define TB_VERSION_STR "2.0.0"
+#define TB_VERSION_STR "2.1.0-dev"
 
 #if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
 // Ensure consistent compile-time options when using as a library
@@ -196,7 +196,6 @@ extern "C" {
 #define TB_HARDCAP_EXIT_MOUSE   "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
 
 /* Colors (numeric) and attributes (bitwise) (tb_cell.fg, tb_cell.bg) */
-#define TB_DEFAULT              0x0000
 #define TB_BLACK                0x0001
 #define TB_RED                  0x0002
 #define TB_GREEN                0x0003
@@ -210,12 +209,14 @@ extern "C" {
 #define TB_REVERSE              0x0400
 #define TB_ITALIC               0x0800
 #define TB_BLINK                0x1000
+#define TB_DEFAULT              0x2000
 #ifdef TB_OPT_TRUECOLOR
 #define TB_TRUECOLOR_BOLD      0x01000000
 #define TB_TRUECOLOR_UNDERLINE 0x02000000
 #define TB_TRUECOLOR_REVERSE   0x04000000
 #define TB_TRUECOLOR_ITALIC    0x08000000
 #define TB_TRUECOLOR_BLINK     0x10000000
+#define TB_TRUECOLOR_DEFAULT   0x20000000
 #endif
 
 /* Event types (tb_event.type) */
@@ -407,11 +408,16 @@ int tb_present();
 int tb_set_cursor(int cx, int cy);
 int tb_hide_cursor();
 
-/* Set cell contents in the internal back buffer at the specified position. Use
- * tb_set_cell_ex() for rendering grapheme clusters (e.g., combining diacritical
- * marks). Function tb_set_cell(x, y, ch, fg, bg) is equivalent to
- * tb_set_cell_ex(x, y, &ch, 1, fg, bg). tb_extend_cell() is a shortcut for
- * appending 1 code point to cell->ech.
+/* Set cell contents in the internal back buffer at the specified position.
+ *
+ * Use tb_set_cell_ex() for rendering grapheme clusters (e.g., combining
+ * diacritical marks).
+ *
+ * Function tb_set_cell(x, y, ch, fg, bg) is equivalent to
+ * tb_set_cell_ex(x, y, &ch, 1, fg, bg).
+ *
+ * Function tb_extend_cell() is a shortcut for appending 1 code point to
+ * cell->ech.
  */
 int tb_set_cell(int x, int y, uint32_t ch, uintattr_t fg, uintattr_t bg);
 int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
@@ -443,12 +449,19 @@ int tb_set_input_mode(int mode);
 
 /* Sets the termbox output mode. Termbox has three output modes:
  *
- * 1. TB_OUTPUT_NORMAL     => [1..8]
+ * 1. TB_OUTPUT_NORMAL     => [0..8]
+ *
  *    This mode provides 8 different colors:
  *      TB_BLACK, TB_RED, TB_GREEN, TB_YELLOW,
  *      TB_BLUE, TB_MAGENTA, TB_CYAN, TB_WHITE
- *    Colors may be bitwise OR'd with attributes:
+ *
+ *    Plus TB_DEFAULT which skips sending a color code (i.e., uses the
+ *    terminal's default color).
+ *
+ *    Colors (including TB_DEFAULT) may be bitwise OR'd with attributes:
  *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC, TB_BLINK
+ *
+ *    The value 0 is interpreted as TB_DEFAULT.
  *
  *    Some notes: TB_REVERSE can be applied as either fg or bg attributes for
  *    the same effect. TB_BOLD, TB_UNDERLINE, TB_ITALIC, TB_BLINK apply as fg
@@ -458,31 +471,48 @@ int tb_set_input_mode(int mode);
  *      tb_set_cell(x, y, '@', TB_BLACK | TB_BOLD, TB_RED);
  *
  * 2. TB_OUTPUT_256        => [0..255]
+ *
  *    In this mode you get 256 distinct colors:
  *      0x00 - 0x07: the 8 colors as in TB_OUTPUT_NORMAL
  *      0x08 - 0x0f: bright versions of the above
  *      0x10 - 0xe7: 216 different colors
  *      0xe8 - 0xff: 24 different shades of grey
  *
- *    Example usage:
- *      tb_set_cell(x, y, '@', 184, 240);
- *      tb_set_cell(x, y, '@', 0xb8, 0xf0);
+ *    Attributes may be bitwise OR'd as in TB_OUTPUT_NORMAL.
  *
- * 3. TB_OUTPUT_216        => [0..215]
+ *    In this mode 0x00 represents TB_BLACK, so TB_DEFAULT must be used for
+ *    default colors.
+ *
+ * 3. TB_OUTPUT_216        => [0..216]
+ *
  *    This mode supports the 3rd range of TB_OUTPUT_256 only, but you don't
  *    need to provide an offset.
  *
- * 4. TB_OUTPUT_GRAYSCALE  => [0..23]
+ *    The value 0 is interpreted as TB_DEFAULT.
+ *
+ * 4. TB_OUTPUT_GRAYSCALE  => [0..24]
+ *
  *    This mode supports the 4th range of TB_OUTPUT_256 only, but you don't
  *    need to provide an offset.
  *
+ *    The value 0 is interpreted as TB_DEFAULT.
+ *
  * 5. TB_OUTPUT_TRUECOLOR  => [0x000000..0xffffff]
+ *
  *    This mode provides 24-bit color on supported terminals. The format is
  *    0xRRGGBB. Colors may be bitwise OR'd with `TB_TRUECOLOR_*` attributes.
+ *
+ *    In this mode 0x000000 represents black, so TB_TRUECOLOR_DEFAULT must be
+ *    used for default colors.
  *
  * If mode is TB_OUTPUT_CURRENT, the function returns the current output mode.
  *
  * The default output mode is TB_OUTPUT_NORMAL.
+ *
+ * To use the terminal default color (i.e., to not send an escape code), pass
+ * TB_DEFAULT (or TB_TRUECOLOR_DEFAULT in TB_OUTPUT_TRUECOLOR mode). For
+ * convenience, the value 0 is interpreted as TB_DEFAULT in TB_OUTPUT_NORMAL,
+ * TB_OUTPUT_216, and TB_OUTPUT_GRAYSCALE.
  *
  * Note, not all terminals support all output modes, especially beyond
  * TB_OUTPUT_NORMAL. There is also no very reliable way to determine color
@@ -1358,7 +1388,8 @@ static int extract_esc_mouse(struct tb_event *event);
 static int resize_cellbufs();
 static void handle_resize(int sig);
 static int send_attr(uintattr_t fg, uintattr_t bg);
-static int send_sgr(uintattr_t fg, uintattr_t bg);
+static int send_sgr(uintattr_t fg, uintattr_t bg, uintattr_t fg_is_default,
+    uintattr_t bg_is_default);
 static int send_cursor_if(int x, int y);
 static int send_char(int x, int y, uint32_t ch);
 static int send_cluster(int x, int y, uint32_t *ch, size_t nch);
@@ -2812,35 +2843,36 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
 
         case TB_OUTPUT_216:
             cfg = fg & 0xff;
-            if (cfg > 215)
-                cfg = 7;
             cbg = bg & 0xff;
-            if (cbg > 215)
-                cbg = 0;
-            cfg += 0x10;
-            cbg += 0x10;
+            if (cfg > 216)
+                cfg = 216;
+            if (cbg > 216)
+                cbg = 216;
+            cfg += 0x0f;
+            cbg += 0x0f;
             break;
 
         case TB_OUTPUT_GRAYSCALE:
             cfg = fg & 0xff;
-            if (cfg > 23)
-                cfg = 23;
             cbg = bg & 0xff;
-            if (cbg > 23)
-                cbg = 0;
-            cfg += 0xe8;
-            cbg += 0xe8;
+            if (cfg > 24)
+                cfg = 24;
+            if (cbg > 24)
+                cbg = 24;
+            cfg += 0xe7;
+            cbg += 0xe7;
             break;
 
 #ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
-            cfg = fg;
-            cbg = bg;
+            cfg = fg & 0xffffff;
+            cbg = bg & 0xffffff;
             break;
 #endif
     }
 
-    uintattr_t attr_bold, attr_blink, attr_italic, attr_underline, attr_reverse;
+    uintattr_t attr_bold, attr_blink, attr_italic, attr_underline, attr_reverse,
+        attr_default;
 #ifdef TB_OPT_TRUECOLOR
     if (global.output_mode == TB_OUTPUT_TRUECOLOR) {
         attr_bold = TB_TRUECOLOR_BOLD;
@@ -2848,6 +2880,7 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         attr_italic = TB_TRUECOLOR_ITALIC;
         attr_underline = TB_TRUECOLOR_UNDERLINE;
         attr_reverse = TB_TRUECOLOR_REVERSE;
+        attr_default = TB_TRUECOLOR_DEFAULT;
     } else
 #endif
     {
@@ -2856,6 +2889,19 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         attr_italic = TB_ITALIC;
         attr_underline = TB_UNDERLINE;
         attr_reverse = TB_REVERSE;
+        attr_default = TB_DEFAULT;
+    }
+
+    /* For convenience (and some back compat), interpret 0 as default in some
+     * modes */
+    if (global.output_mode == TB_OUTPUT_NORMAL ||
+        global.output_mode == TB_OUTPUT_216 ||
+        global.output_mode == TB_OUTPUT_GRAYSCALE)
+    {
+        if ((fg & 0xff) == 0)
+            fg |= attr_default;
+        if ((bg & 0xff) == 0)
+            bg |= attr_default;
     }
 
     if (fg & attr_bold)
@@ -2876,7 +2922,7 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         if_err_return(rv,
             bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
 
-    if_err_return(rv, send_sgr(cfg, cbg));
+    if_err_return(rv, send_sgr(cfg, cbg, fg & attr_default, bg & attr_default));
 
     global.last_fg = fg;
     global.last_bg = bg;
@@ -2884,16 +2930,12 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
     return TB_OK;
 }
 
-static int send_sgr(uintattr_t fg, uintattr_t bg) {
+static int send_sgr(uintattr_t cfg, uintattr_t cbg, uintattr_t fg_is_default,
+    uintattr_t bg_is_default) {
     int rv;
     char nbuf[32];
 
-    if (
-#ifdef TB_OPT_TRUECOLOR
-        global.output_mode != TB_OUTPUT_TRUECOLOR &&
-#endif
-        fg == TB_DEFAULT && bg == TB_DEFAULT)
-    {
+    if (fg_is_default && bg_is_default) {
         return TB_OK;
     }
 
@@ -2901,16 +2943,16 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
         default:
         case TB_OUTPUT_NORMAL:
             send_literal(rv, "\x1b[");
-            if (fg != TB_DEFAULT) {
+            if (!fg_is_default) {
                 send_literal(rv, "3");
-                send_num(rv, nbuf, fg - 1);
-                if (bg != TB_DEFAULT) {
+                send_num(rv, nbuf, cfg - 1);
+                if (!bg_is_default) {
                     send_literal(rv, ";");
                 }
             }
-            if (bg != TB_DEFAULT) {
+            if (!bg_is_default) {
                 send_literal(rv, "4");
-                send_num(rv, nbuf, bg - 1);
+                send_num(rv, nbuf, cbg - 1);
             }
             send_literal(rv, "m");
             break;
@@ -2919,34 +2961,42 @@ static int send_sgr(uintattr_t fg, uintattr_t bg) {
         case TB_OUTPUT_216:
         case TB_OUTPUT_GRAYSCALE:
             send_literal(rv, "\x1b[");
-            if (fg != TB_DEFAULT) {
+            if (!fg_is_default) {
                 send_literal(rv, "38;5;");
-                send_num(rv, nbuf, fg);
-                if (bg != TB_DEFAULT) {
+                send_num(rv, nbuf, cfg);
+                if (!bg_is_default) {
                     send_literal(rv, ";");
                 }
             }
-            if (bg != TB_DEFAULT) {
+            if (!bg_is_default) {
                 send_literal(rv, "48;5;");
-                send_num(rv, nbuf, bg);
+                send_num(rv, nbuf, cbg);
             }
             send_literal(rv, "m");
             break;
 
 #ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
-            send_literal(rv, "\x1b[38;2;");
-            send_num(rv, nbuf, (fg >> 16) & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, (fg >> 8) & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, fg & 0xff);
-            send_literal(rv, ";48;2;");
-            send_num(rv, nbuf, (bg >> 16) & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, (bg >> 8) & 0xff);
-            send_literal(rv, ";");
-            send_num(rv, nbuf, bg & 0xff);
+            send_literal(rv, "\x1b[");
+            if (!fg_is_default) {
+                send_literal(rv, "38;2;");
+                send_num(rv, nbuf, (cfg >> 16) & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, (cfg >> 8) & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, cfg & 0xff);
+                if (!bg_is_default) {
+                    send_literal(rv, ";");
+                }
+            }
+            if (!bg_is_default) {
+                send_literal(rv, "48;2;");
+                send_num(rv, nbuf, (cbg >> 16) & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, (cbg >> 8) & 0xff);
+                send_literal(rv, ";");
+                send_num(rv, nbuf, cbg & 0xff);
+            }
             send_literal(rv, "m");
             break;
 #endif
