@@ -1513,7 +1513,8 @@ int tb_present(void) {
                     w = wcswidth((wchar_t *)back->ech, back->nech);
                 else
 #endif
-                    w = wcwidth(back->ch);
+                    /* wcwidth() simply returns -1 on overflow of wchar_t */
+                    w = wcwidth((wchar_t)back->ch);
             }
             if (w < 1) {
                 w = 1;
@@ -1705,7 +1706,7 @@ int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
     }
     while (*str) {
         str += tb_utf8_char_to_unicode(&uni, str);
-        w = wcwidth(uni);
+        w = wcwidth((wchar_t)uni);
         if (w < 0) {
             w = 1;
         }
@@ -2737,10 +2738,10 @@ static int extract_esc_mouse(struct tb_event *event) {
             } else {
                 int start = (type == TYPE_1015 ? 2 : 3);
 
-                int n1 = strtoul(&in->buf[start], NULL, 10);
-                int n2 =
+                unsigned n1 = strtoul(&in->buf[start], NULL, 10);
+                unsigned n2 =
                     strtoul(&in->buf[indices[FIRST_SEMICOLON] + 1], NULL, 10);
-                int n3 =
+                unsigned n3 =
                     strtoul(&in->buf[indices[LAST_SEMICOLON] + 1], NULL, 10);
 
                 if (type == TYPE_1015) {
@@ -3049,9 +3050,10 @@ static int send_cluster(int x, int y, uint32_t *ch, size_t nch) {
 
 static int convert_num(uint32_t num, char *buf) {
     int i, l = 0;
-    int ch;
+    char ch;
     do {
-        buf[l++] = '0' + (num % 10);
+        /* '0' = 48; 48 + num%10 < 58 < MAX_8bitCHAR */
+        buf[l++] = (char)('0' + (num % 10));
         num /= 10;
     } while (num);
     for (i = 0; i < l / 2; i++) {
