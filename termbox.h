@@ -380,11 +380,11 @@ struct tb_event {
  * successful initialization, the library must be finalized using the
  * tb_shutdown() function.
  */
-int tb_init();
+int tb_init(void);
 int tb_init_file(const char *path);
 int tb_init_fd(int ttyfd);
 int tb_init_rwfd(int rfd, int wfd);
-int tb_shutdown();
+int tb_shutdown(void);
 
 /* Returns the size of the internal back buffer (which is the same as terminal's
  * window size in rows and columns). The internal buffer can be resized after
@@ -392,21 +392,21 @@ int tb_shutdown();
  * unspecified negative value when called before tb_init() or after
  * tb_shutdown().
  */
-int tb_width();
-int tb_height();
+int tb_width(void);
+int tb_height(void);
 
 /* Clears the internal back buffer using TB_DEFAULT color or the
  * color/attributes set by tb_set_clear_attrs() function.
  */
-int tb_clear();
+int tb_clear(void);
 int tb_set_clear_attrs(uintattr_t fg, uintattr_t bg);
 
 /* Synchronizes the internal back buffer with the terminal by writing to tty. */
-int tb_present();
+int tb_present(void);
 
 /* Sets the position of the cursor. Upper-left character is (0, 0). */
 int tb_set_cursor(int cx, int cy);
-int tb_hide_cursor();
+int tb_hide_cursor(void);
 
 /* Set cell contents in the internal back buffer at the specified position.
  *
@@ -568,12 +568,12 @@ int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *));
 int tb_utf8_char_length(char c);
 int tb_utf8_char_to_unicode(uint32_t *out, const char *c);
 int tb_utf8_unicode_to_char(char *out, uint32_t c);
-int tb_last_errno();
+int tb_last_errno(void);
 const char *tb_strerror(int err);
-struct tb_cell *tb_cell_buffer();
-int tb_has_truecolor();
-int tb_has_egc();
-const char *tb_version();
+struct tb_cell *tb_cell_buffer(void);
+int tb_has_truecolor(void);
+int tb_has_egc(void);
+const char *tb_version(void);
 
 #ifdef __cplusplus
 }
@@ -1356,28 +1356,28 @@ static const unsigned char utf8_length[256] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
 
 static const unsigned char utf8_mask[6] = {0x7f, 0x1f, 0x0f, 0x07, 0x03, 0x01};
 
-static int tb_reset();
+static int tb_reset(void);
 static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
     size_t *out_w, const char *fmt, va_list vl);
-static int init_term_attrs();
-static int init_term_caps();
-static int init_cap_trie();
+static int init_term_attrs(void);
+static int init_term_caps(void);
+static int init_cap_trie(void);
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod);
 static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
     size_t *depth);
 static int cap_trie_deinit(struct cap_trie_t *node);
-static int init_resize_handler();
-static int send_init_escape_codes();
-static int send_clear();
-static int update_term_size();
-static int update_term_size_via_esc();
-static int init_cellbuf();
-static int tb_deinit();
-static int load_terminfo();
+static int init_resize_handler(void);
+static int send_init_escape_codes(void);
+static int send_clear(void);
+static int update_term_size(void);
+static int update_term_size_via_esc(void);
+static int init_cellbuf(void);
+static int tb_deinit(void);
+static int load_terminfo(void);
 static int load_terminfo_from_path(const char *path, const char *term);
 static int read_terminfo_path(const char *path);
-static int parse_terminfo_caps();
-static int load_builtin_caps();
+static int parse_terminfo_caps(void);
+static int load_builtin_caps(void);
 static const char *get_terminfo_string(int16_t str_offsets_pos,
     int16_t str_table_pos, int16_t str_table_len, int16_t str_index);
 static int wait_event(struct tb_event *event, int timeout);
@@ -1386,7 +1386,7 @@ static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
 static int extract_esc_cap(struct tb_event *event);
 static int extract_esc_mouse(struct tb_event *event);
-static int resize_cellbufs();
+static int resize_cellbufs(void);
 static void handle_resize(int sig);
 static int send_attr(uintattr_t fg, uintattr_t bg);
 static int send_sgr(uintattr_t fg, uintattr_t bg, uintattr_t fg_is_default,
@@ -1413,7 +1413,7 @@ static int bytebuf_flush(struct bytebuf_t *b, int fd);
 static int bytebuf_reserve(struct bytebuf_t *b, size_t sz);
 static int bytebuf_free(struct bytebuf_t *b);
 
-int tb_init() {
+int tb_init(void) {
     return tb_init_file("/dev/tty");
 }
 
@@ -1461,23 +1461,23 @@ int tb_init_rwfd(int rfd, int wfd) {
     return rv;
 }
 
-int tb_shutdown() {
+int tb_shutdown(void) {
     if_not_init_return();
     tb_deinit();
     return TB_OK;
 }
 
-int tb_width() {
+int tb_width(void) {
     if_not_init_return();
     return global.width;
 }
 
-int tb_height() {
+int tb_height(void) {
     if_not_init_return();
     return global.height;
 }
 
-int tb_clear() {
+int tb_clear(void) {
     if_not_init_return();
     return cellbuf_clear(&global.back);
 }
@@ -1489,7 +1489,7 @@ int tb_set_clear_attrs(uintattr_t fg, uintattr_t bg) {
     return TB_OK;
 }
 
-int tb_present() {
+int tb_present(void) {
     if_not_init_return();
 
     int rv;
@@ -1572,7 +1572,7 @@ int tb_set_cursor(int cx, int cy) {
     return TB_OK;
 }
 
-int tb_hide_cursor() {
+int tb_hide_cursor(void) {
     if_not_init_return();
     int rv;
     if (global.cursor_x >= 0) {
@@ -1771,7 +1771,7 @@ int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *)) {
     return TB_ERR;
 }
 
-struct tb_cell *tb_cell_buffer() {
+struct tb_cell *tb_cell_buffer(void) {
     if (!global.initialized)
         return NULL;
     return global.back.cells;
@@ -1833,7 +1833,7 @@ int tb_utf8_unicode_to_char(char *out, uint32_t c) {
     return len;
 }
 
-int tb_last_errno() {
+int tb_last_errno(void) {
     return global.last_errno;
 }
 
@@ -1880,7 +1880,7 @@ const char *tb_strerror(int err) {
     }
 }
 
-int tb_has_truecolor() {
+int tb_has_truecolor(void) {
 #ifdef TB_OPT_TRUECOLOR
     return 1;
 #else
@@ -1888,7 +1888,7 @@ int tb_has_truecolor() {
 #endif
 }
 
-int tb_has_egc() {
+int tb_has_egc(void) {
 #ifdef TB_OPT_EGC
     return 1;
 #else
@@ -1896,11 +1896,11 @@ int tb_has_egc() {
 #endif
 }
 
-const char *tb_version() {
+const char *tb_version(void) {
     return TB_VERSION_STR;
 }
 
-static int tb_reset() {
+static int tb_reset(void) {
     int ttyfd_open = global.ttyfd_open;
     memset(&global, 0, sizeof(global));
     global.ttyfd = -1;
@@ -1924,7 +1924,7 @@ static int tb_reset() {
     return TB_OK;
 }
 
-static int init_term_attrs() {
+static int init_term_attrs(void) {
     if (global.ttyfd < 0) {
         return TB_OK;
     }
@@ -1961,14 +1961,14 @@ int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
     return tb_print_ex(x, y, fg, bg, out_w, buf);
 }
 
-static int init_term_caps() {
+static int init_term_caps(void) {
     if (load_terminfo() == TB_OK) {
         return parse_terminfo_caps();
     }
     return load_builtin_caps();
 }
 
-static int init_cap_trie() {
+static int init_cap_trie(void) {
     int rv, i;
 
     // Add caps from terminfo or built-in
@@ -2076,7 +2076,7 @@ static int cap_trie_deinit(struct cap_trie_t *node) {
     return TB_OK;
 }
 
-static int init_resize_handler() {
+static int init_resize_handler(void) {
     if (pipe(global.resize_pipefd) != 0) {
         global.last_errno = errno;
         return TB_ERR_RESIZE_PIPE;
@@ -2093,7 +2093,7 @@ static int init_resize_handler() {
     return TB_OK;
 }
 
-static int send_init_escape_codes() {
+static int send_init_escape_codes(void) {
     int rv;
     if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_ENTER_CA]));
     if_err_return(rv,
@@ -2103,7 +2103,7 @@ static int send_init_escape_codes() {
     return TB_OK;
 }
 
-static int send_clear() {
+static int send_clear(void) {
     int rv;
 
     if_err_return(rv, send_attr(global.fg, global.bg));
@@ -2119,7 +2119,7 @@ static int send_clear() {
     return TB_OK;
 }
 
-static int update_term_size() {
+static int update_term_size(void) {
     int rv, ioctl_errno;
 
     if (global.ttyfd < 0) {
@@ -2144,7 +2144,7 @@ static int update_term_size() {
     return TB_ERR_RESIZE_IOCTL;
 }
 
-static int update_term_size_via_esc() {
+static int update_term_size_via_esc(void) {
 #ifndef TB_RESIZE_FALLBACK_MS
 #define TB_RESIZE_FALLBACK_MS 1000
 #endif
@@ -2189,7 +2189,7 @@ static int update_term_size_via_esc() {
     return TB_OK;
 }
 
-static int init_cellbuf() {
+static int init_cellbuf(void) {
     int rv;
     if_err_return(rv, cellbuf_init(&global.back, global.width, global.height));
     if_err_return(rv, cellbuf_init(&global.front, global.width, global.height));
@@ -2198,7 +2198,7 @@ static int init_cellbuf() {
     return TB_OK;
 }
 
-static int tb_deinit() {
+static int tb_deinit(void) {
     if (global.caps[0] != NULL && global.wfd >= 0) {
         bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]);
         bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]);
@@ -2238,7 +2238,7 @@ static int tb_deinit() {
     return TB_OK;
 }
 
-static int load_terminfo() {
+static int load_terminfo(void) {
     int rv;
     char tmp[PATH_MAX];
 
@@ -2347,7 +2347,7 @@ static int read_terminfo_path(const char *path) {
     return TB_OK;
 }
 
-static int parse_terminfo_caps() {
+static int parse_terminfo_caps(void) {
     // See term(5) "LEGACY STORAGE FORMAT" and "EXTENDED STORAGE FORMAT" for a
     // description of this behavior.
 
@@ -2399,7 +2399,7 @@ static int parse_terminfo_caps() {
     return TB_OK;
 }
 
-static int load_builtin_caps() {
+static int load_builtin_caps(void) {
     int i, j;
     const char *term = getenv("TERM");
 
@@ -2804,7 +2804,7 @@ static int extract_esc_mouse(struct tb_event *event) {
     return ret;
 }
 
-static int resize_cellbufs() {
+static int resize_cellbufs(void) {
     int rv;
     if_err_return(rv,
         cellbuf_resize(&global.back, global.width, global.height));
