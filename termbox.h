@@ -1378,8 +1378,8 @@ static int load_terminfo_from_path(const char *path, const char *term);
 static int read_terminfo_path(const char *path);
 static int parse_terminfo_caps(void);
 static int load_builtin_caps(void);
-static const char *get_terminfo_string(int16_t str_offsets_pos,
-    int16_t str_table_pos, int16_t str_table_len, int16_t str_index);
+static const char *get_terminfo_string(uint16_t str_offsets_pos,
+    uint16_t str_table_pos, int16_t str_table_len, int16_t str_index);
 static int wait_event(struct tb_event *event, int timeout);
 static int extract_event(struct tb_event *event);
 static int extract_esc(struct tb_event *event);
@@ -1393,7 +1393,7 @@ static int send_sgr(uintattr_t fg, uintattr_t bg, uintattr_t fg_is_default,
     uintattr_t bg_is_default);
 static int send_cursor_if(int x, int y);
 static int send_char(int x, int y, uint32_t ch);
-static int send_cluster(int x, int y, uint32_t *ch, size_t nch);
+static int send_cluster(int x, int y, const uint32_t *ch, size_t nch);
 static int convert_num(uint32_t num, char *buf);
 static int cell_cmp(struct tb_cell *a, struct tb_cell *b);
 static int cell_copy(struct tb_cell *dst, struct tb_cell *src);
@@ -1830,10 +1830,12 @@ int tb_utf8_unicode_to_char(char *out, uint32_t c) {
     }
 
     for (i = len - 1; i > 0; --i) {
-        out[i] = (c & 0x3f) | 0x80;
+        /* (x & y) <= min(x, y) */
+        out[i] = (char)( (c & 0x3f) | 0x80 );
         c >>= 6;
     }
-    out[0] = c | first;
+    /* (c >>= 6) times (len - 1) << INT_8bitMAX */
+    out[0] = (char)(c | first);
 
     return len;
 }
@@ -2378,14 +2380,14 @@ static int parse_terminfo_caps(void) {
     // > even byte
     const int align_offset = (header[1] + header[2]) % 2 != 0 ? 1 : 0;
 
-    const int pos_str_offsets =
+    const uint16_t pos_str_offsets =
         (6 * sizeof(int16_t)) // header (12 bytes)
         + header[1]           // length of names section
         + header[2]           // length of boolean section
         + align_offset +
         (header[3] * bytes_per_int); // length of numbers section
 
-    const int pos_str_table =
+    const uint16_t pos_str_table =
         pos_str_offsets +
         (header[4] * sizeof(int16_t)); // length of string offsets table
 
@@ -2438,8 +2440,8 @@ static int load_builtin_caps(void) {
     return TB_ERR_UNSUPPORTED_TERM;
 }
 
-static const char *get_terminfo_string(int16_t str_offsets_pos,
-    int16_t str_table_pos, int16_t str_table_len, int16_t str_index) {
+static const char *get_terminfo_string(uint16_t str_offsets_pos,
+    uint16_t str_table_pos, int16_t str_table_len, int16_t str_index) {
     const int16_t *str_offset =
         (int16_t *)(global.terminfo + (int)str_offsets_pos +
                     ((int)str_index * (int)sizeof(int16_t)));
@@ -2465,8 +2467,8 @@ static int wait_event(struct tb_event *event, int timeout) {
     fd_set fds;
     struct timeval tv;
     tv.tv_sec = timeout / 1000;
-    tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
-
+    /* TODO: Smarter solution? This would overflow in 68 years */
+    tv.tv_usec = (timeout - (int)(tv.tv_sec * 1000)) * 1000;
     do {
         FD_ZERO(&fds);
         FD_SET(global.rfd, &fds);
@@ -3031,7 +3033,7 @@ static int send_char(int x, int y, uint32_t ch) {
     return send_cluster(x, y, &ch, 1);
 }
 
-static int send_cluster(int x, int y, uint32_t *ch, size_t nch) {
+static int send_cluster(int x, int y, const uint32_t *ch, size_t nch) {
     int rv;
     char abuf[8];
 
