@@ -1669,6 +1669,8 @@ int tb_set_output_mode(int mode) {
 #endif
             global.output_mode = mode;
             return TB_OK;
+        default:
+            break;
     }
     return TB_ERR;
 }
@@ -1768,6 +1770,8 @@ int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *)) {
         case TB_FUNC_EXTRACT_POST:
             global.fn_extract_esc_post = fn;
             return TB_OK;
+        default:
+            break;
     }
     return TB_ERR;
 }
@@ -2791,6 +2795,8 @@ static int extract_esc_mouse(struct tb_event *event) {
             }
         } break;
         case TYPE_MAX:
+        default:
+            // fallthrough
             ret = TB_ERR;
     }
 
