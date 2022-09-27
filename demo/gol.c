@@ -4,7 +4,7 @@
  */
 
 #define TB_IMPL
-#include "termbox.h"
+#include "../termbox.h"
 
 /* cell field index */
 #define FILLED 1
