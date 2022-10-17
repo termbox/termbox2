@@ -89,8 +89,10 @@ Basic examples in PHP, Python, Ruby, Go, and Zig are in the `demo/` directory.
 
 * [mle][2] - flexible terminal-based text editor
 * [ictree][3] - like tree but interactive
+* [lavat][4] - lava lamp for the terminal
 
 [0]: https://suckless.org
 [1]: https://github.com/termbox/termbox
 [2]: https://github.com/adsr/mle
 [3]: https://github.com/NikitaIvanovV/ictree
+[4]: https://github.com/AngelJumbo/lavat
