@@ -3,7 +3,7 @@
 package main
 
 /*
-#cgo LDFLAGS: -L.. -Wl,-rpath,.. -ltermbox
+#cgo LDFLAGS: -L.. -Wl,-rpath,.. -ltermbox2
 #include <stdint.h>
 typedef struct tb_event_s {
     uint8_t _type;

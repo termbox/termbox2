@@ -1,7 +1,7 @@
-// zig run -I.. -I/usr/include -I/usr/include/x86_64-linux-gnu/ -rpath .. -L.. -ltermbox -lc example.zig
+// zig run -I.. -I/usr/include -I/usr/include/x86_64-linux-gnu/ -rpath .. -L.. -ltermbox2 -lc example.zig
 // (Is there a way to avoid the explicit system library paths?)
 
-const c = @cImport(@cInclude("termbox.h"));
+const c = @cImport(@cInclude("termbox2.h"));
 const std = @import("std");
 
 pub fn main() void {

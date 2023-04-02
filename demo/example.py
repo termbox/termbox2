@@ -20,7 +20,7 @@ ffi.cdef("""
     int tb_poll_event(struct tb_event *event);
     int tb_printf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...);
 """)
-termbox = ffi.dlopen("../libtermbox.so")
+termbox = ffi.dlopen("../libtermbox2.so")
 ev = ffi.new("struct tb_event *")
 
 termbox.tb_init()

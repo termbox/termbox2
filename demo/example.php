@@ -19,7 +19,7 @@ $termbox_h = <<<'EOD'
     int tb_printf(int x, int y, uint32_t fg, uint32_t bg, const char *fmt, ...);
 EOD;
 
-$termbox = FFI::cdef($termbox_h, '../libtermbox.so');
+$termbox = FFI::cdef($termbox_h, '../libtermbox2.so');
 
 $ev = $termbox->new('struct tb_event');
 

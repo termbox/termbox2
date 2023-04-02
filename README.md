@@ -14,7 +14,7 @@ stand-alone shared or static library.
 
 ```c
 #define TB_IMPL
-#include "termbox.h"
+#include "termbox2.h"
 #include <stdio.h>
 
 int main(int argc, char **argv) {
@@ -73,12 +73,12 @@ int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...);
 
 As mentioned above, there are two options:
 
-1. Copy (or `git submodule`) `termbox.h` into your C project. As normal, include
-   the header file wherever you want to use `tb_*` functions, but also be sure
-   to `#define TB_IMPL` in exactly one of your source files. (This is a common
-   pattern for single file header libraries.)
-2. Build termbox2 as a library (either `make libtermbox.so` or
-   `make libtermbox.a`) and link as normal.
+1. Copy (or `git submodule`) `termbox2.h` into your C project. As normal,
+   include the header file wherever you want to use `tb_*` functions, but also
+   be sure to `#define TB_IMPL` in exactly one of your source files. (This is a
+   common pattern for single file header libraries.)
+2. Build termbox2 as a library (either `make libtermbox2.so` or
+   `make libtermbox2.a`) and link as normal.
 
 ### Language bindings (FFI and ABI compats)
 

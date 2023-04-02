@@ -3,7 +3,7 @@ require 'ffi'
 
 module Termbox
   extend FFI::Library
-  ffi_lib '../libtermbox.so'
+  ffi_lib '../libtermbox2.so'
   class Event < FFI::Struct
     layout :type, :uint8,
            :mod, :uint8,

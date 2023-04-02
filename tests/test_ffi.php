@@ -4,13 +4,13 @@ declare(strict_types=1);
 return (function() {
     // This is a little whacky. `FFI::cdef` isn't smart enough to handle
     // preprocessor directives, so we feed it a `gcc -E` version of
-    // termbox.h (termbox.ffi.h, created by the Makefile). On the other
+    // termbox2.h (termbox2.ffi.h, created by the Makefile). On the other
     // hand, it's useful to have `#define` constants for tests, so we parse
-    // those out from the raw  `termbox.h`.
+    // those out from the raw  `termbox2.h`.
     $repo_dir = dirname(__DIR__);
-    $termbox_h = "$repo_dir/termbox.h";
-    $termbox_ffi_h = "$repo_dir/termbox.ffi.h";
-    $libtermbox_so = "$repo_dir/libtermbox.so";
+    $termbox_h = "$repo_dir/termbox2.h";
+    $termbox_ffi_h = "$repo_dir/termbox2.ffi.h";
+    $libtermbox_so = "$repo_dir/libtermbox2.so";
     $termbox_h_data = file_get_contents($termbox_h);
 
     // Look at only the content in between `__TERMBOX_H`

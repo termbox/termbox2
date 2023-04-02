@@ -1,6 +1,6 @@
-termbox.o
-libtermbox.a
-libtermbox.so*
-termbox.ffi.h
-termbox.h.lib
+termbox2.o
+libtermbox2.a
+libtermbox2.so*
+termbox2.ffi.h
+termbox2.h.lib
 demo/keyboard
