@@ -25,22 +25,32 @@ function test_mode($test, string $mode, int $n, int $w, int &$x, int &$y): void 
             $x = 0;
             $y++;
         }
-        $test->ffi->tb_print($x, $y, $fg, $attr_default, $s);
+        if ($mode === 'TB_OUTPUT_256') {
+            if ($fg === 0) {
+                $cfg = $attr_default;
+            } else if ($fg === 1) {
+                $cfg = $test->defines['TB_256_BLACK'];
+            } else {
+                $cfg = $fg - 1;
+            }
+        } else {
+            $cfg = $fg;
+        }
+        $test->ffi->tb_print($x, $y, $cfg, $attr_default, $s);
         $x += $slen;
     }
 
     $y++;
     $test->ffi->tb_print($x = 0, $y++, $attr_default | $attr_italic, 6, "fg=def|ital bg=6");
-    $test->ffi->tb_print($x = 0, $y++, 0             | $attr_italic, 6, "fg=0|ital   bg=6");
+    $test->ffi->tb_print($x = 0, $y++, 0             | $attr_italic, 6, "fg=0x0|ital bg=6");
 
     $test->ffi->tb_present();
 }
 
 // TB_OUTPUT_NORMAL
 test_mode($test, 'TB_OUTPUT_NORMAL',    8,   $w, $x, $y);
-test_mode($test, 'TB_OUTPUT_256',       255, $w, $x, $y);
+test_mode($test, 'TB_OUTPUT_256',       256, $w, $x, $y);
 test_mode($test, 'TB_OUTPUT_216',       216, $w, $x, $y);
 test_mode($test, 'TB_OUTPUT_GRAYSCALE', 24,  $w, $x, $y);
-
 
 $test->screencap();

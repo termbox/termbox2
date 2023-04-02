@@ -9,13 +9,14 @@ if (!$test->ffi->tb_has_truecolor()) {
 $attr_bold = $test->defines['TB_TRUECOLOR_BOLD'];
 $attr_underline = $test->defines['TB_TRUECOLOR_UNDERLINE'];
 $attr_italic = $test->defines['TB_TRUECOLOR_ITALIC'];
-$attr_default = $test->defines['TB_TRUECOLOR_DEFAULT'];
+$attr_default = $test->defines['TB_DEFAULT'];
+$true_black = $test->defines['TB_TRUECOLOR_BLACK'];
 
 $css_colors = [
     'antiquewhite'         => [ 0xfaebd7, $attr_default ],
     'aquamarine'           => [ 0x7fffd4, $attr_default ],
     'beige'                => [ 0xf5f5dc, $attr_default ],
-    'black'                => [ 0x000000, $attr_default ],
+    'black'                => [ $true_black, $attr_default ],
     'blue'                 => [ 0x0000ff, $attr_default ],
     'brown'                => [ 0xa52a2a, $attr_default ],
     'cadetblue'            => [ 0x5f9ea0, $attr_default ],
@@ -85,11 +86,11 @@ $css_colors = [
     'whitesmoke'           => [ 0xf5f5f5, $attr_default ],
     'yellowgreen'          => [ 0x9acd32, $attr_default ],
     'green on default'     => [ 0x00ff00, $attr_default ],
-    'black on default'     => [ 0x000000, $attr_default ],
+    'black on default'     => [ $true_black, $attr_default ],
     'default on green'     => [ $attr_default, 0x00ff00 ],
-    'default on black'     => [ $attr_default, 0x000000 ],
+    'default on black'     => [ $attr_default, $true_black ],
     'default on default'   => [ $attr_default, $attr_default ],
-    'default w/ ignored bits' => [ 0x123456 | $attr_default, 0x789abc | $attr_default ],
+    'black on black w/ ignored bits' => [ 0x123456 | $true_black, 0x789abc | $true_black ],
     'italic on default'    => [ $attr_default | $attr_italic, $attr_default ],
 ];
 
@@ -137,6 +138,8 @@ for ($r = 0x00; $r <= 0xff; $r += 0xff) {
                 $x = 0;
                 $y++;
             }
+            if ($fg == 0) $fg = $true_black;
+            if ($bg == 0) $bg = $true_black;
             $test->ffi->tb_print($x, $y, $fg, $bg, $str);
             $x += $slen;
         }
