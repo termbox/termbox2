@@ -1690,6 +1690,8 @@ int tb_set_output_mode(int mode) {
 #ifdef TB_OPT_TRUECOLOR
         case TB_OUTPUT_TRUECOLOR:
 #endif
+            global.last_fg = ~global.fg;
+            global.last_bg = ~global.bg;
             global.output_mode = mode;
             return TB_OK;
     }
