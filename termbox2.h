@@ -58,7 +58,7 @@ extern "C" {
 
 // __ffi_start
 
-#define TB_VERSION_STR "2.1.0-dev"
+#define TB_VERSION_STR "2.2.0-dev"
 
 #if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
 // Ensure consistent compile-time options when using as a library
