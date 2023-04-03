@@ -405,6 +405,11 @@ int tb_set_clear_attrs(uintattr_t fg, uintattr_t bg);
 /* Synchronizes the internal back buffer with the terminal by writing to tty. */
 int tb_present(void);
 
+/* Clears the internal front buffer effectively forcing a complete re-render of
+ * the back buffer to the tty. It is not necessary to call this under normal
+ * circumstances. */
+int tb_invalidate(void);
+
 /* Sets the position of the cursor. Upper-left character is (0, 0). */
 int tb_set_cursor(int cx, int cy);
 int tb_hide_cursor(void);
@@ -516,12 +521,14 @@ int tb_set_input_mode(int mode);
  * TB_DEFAULT. For convenience, the value 0 is interpreted as TB_DEFAULT in
  * all modes.
  *
- * Note, attributes persist after changing the output mode. This means if you,
- * for example, start in TB_OUTPUT_NORMAL with some cells colored TB_CYAN (7)
- * and then switch to TB_OUTPUT_GRAYSCALE, those cells will now render as a
- * shade of gray. As such, it is recommended to avoid switching output modes
- * at runtime unless your program can sensibly re-assign all attributes of all
- * cells in the new output mode.
+ * Note, cell attributes persist after switching output modes. Any translation
+ * between, for example, TB_OUTPUT_NORMAL's TB_RED and TB_OUTPUT_TRUECOLOR's
+ * 0xff0000 must be performed by the caller. Also note that cells previously
+ * rendered in one mode may persist unchanged until the front buffer is cleared
+ * (such as after a resize event) at which point it will be re-interpreted and
+ * flushed according to the current mode. Callers may invoke tb_invalidate if
+ * it is desirable to immediately re-interpret and flush the entire screen
+ * according to the current mode.
  *
  * Note, not all terminals support all output modes, especially beyond
  * TB_OUTPUT_NORMAL. There is also no very reliable way to determine color
@@ -1562,6 +1569,13 @@ int tb_present(void) {
     if_err_return(rv, send_cursor_if(global.cursor_x, global.cursor_y));
     if_err_return(rv, bytebuf_flush(&global.out, global.wfd));
 
+    return TB_OK;
+}
+
+int tb_invalidate(void) {
+    int rv;
+    if_not_init_return();
+    if_err_return(rv, resize_cellbufs());
     return TB_OK;
 }
 
