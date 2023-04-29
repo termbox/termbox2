@@ -82,8 +82,8 @@ As mentioned above, there are two options:
 
 ### Language bindings (FFI and ABI compats)
 
-Basic examples in PHP, Python, Ruby, Go, and Zig are in the `demo/` directory.
-(Feel free to submit PRs for other languages.)
+Basic examples in PHP, Python, Ruby, Go, Zig, and D are in the `demo/`
+directory. (Feel free to submit PRs for other languages.)
 
 ### Examples
 
