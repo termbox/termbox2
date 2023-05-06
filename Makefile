@@ -51,6 +51,9 @@ terminfo:
 	awk -vg=0 'g==0{print} /BEGIN codegen h/{g=1; system("./codegen.sh h")} /END codegen h/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
 	awk -vg=0 'g==0{print} /BEGIN codegen c/{g=1; system("./codegen.sh c")} /END codegen c/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
 
+format:
+	clang-format -i termbox2.h
+
 test: $(termbox_so) $(termbox_ffi_h)
 	docker build -f tests/Dockerfile --build-arg=cflags="$(termbox_cflags)" .
 
@@ -91,4 +94,4 @@ install_so: $(termbox_so_x_y_z)
 clean:
 	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x) $(termbox_so_x_y_z) $(termbox_ffi_h) $(termbox_h_lib) tests/**/observed.ansi
 
-.PHONY: all lib terminfo test test_local install install_lib install_h install_h_lib install_a install_so clean
+.PHONY: all lib terminfo format test test_local install install_lib install_h install_h_lib install_a install_so clean
