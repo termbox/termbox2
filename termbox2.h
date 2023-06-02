@@ -52,6 +52,10 @@ SOFTWARE.
 #include <unistd.h>
 #include <wchar.h>
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
