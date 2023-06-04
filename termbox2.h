@@ -606,17 +606,13 @@ const char *tb_version(void);
 #ifdef TB_IMPL
 
 #define if_err_return(rv, expr)                                                \
-    if (((rv) = (expr)) != TB_OK)                                              \
-    return (rv)
+    if (((rv) = (expr)) != TB_OK) return (rv)
 #define if_err_break(rv, expr)                                                 \
-    if (((rv) = (expr)) != TB_OK)                                              \
-    break
+    if (((rv) = (expr)) != TB_OK) break
 #define if_ok_return(rv, expr)                                                 \
-    if (((rv) = (expr)) == TB_OK)                                              \
-    return (rv)
+    if (((rv) = (expr)) == TB_OK) return (rv)
 #define if_ok_or_need_more_return(rv, expr)                                    \
-    if (((rv) = (expr)) == TB_OK || (rv) == TB_ERR_NEED_MORE)                  \
-    return (rv)
+    if (((rv) = (expr)) == TB_OK || (rv) == TB_ERR_NEED_MORE) return (rv)
 
 #define send_literal(rv, a)                                                    \
     if_err_return((rv), bytebuf_nputs(&global.out, (a), sizeof(a) - 1))
@@ -628,13 +624,11 @@ const char *tb_version(void);
 #define snprintf_or_return(rv, str, sz, fmt, ...)                              \
     do {                                                                       \
         (rv) = snprintf((str), (sz), (fmt), __VA_ARGS__);                      \
-        if ((rv) < 0 || (rv) >= (int)(sz))                                     \
-            return TB_ERR;                                                     \
+        if ((rv) < 0 || (rv) >= (int)(sz)) return TB_ERR;                      \
     } while (0)
 
 #define if_not_init_return()                                                   \
-    if (!global.initialized)                                                   \
-    return TB_ERR_NOT_INIT
+    if (!global.initialized) return TB_ERR_NOT_INIT
 
 struct bytebuf_t {
     char *buf;
@@ -1588,10 +1582,8 @@ int tb_invalidate(void) {
 int tb_set_cursor(int cx, int cy) {
     if_not_init_return();
     int rv;
-    if (cx < 0)
-        cx = 0;
-    if (cy < 0)
-        cy = 0;
+    if (cx < 0) cx = 0;
+    if (cy < 0) cy = 0;
     if (global.cursor_x == -1) {
         if_err_return(rv,
             bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]));
@@ -1804,8 +1796,7 @@ int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *)) {
 }
 
 struct tb_cell *tb_cell_buffer(void) {
-    if (!global.initialized)
-        return NULL;
+    if (!global.initialized) return NULL;
     return global.back.cells;
 }
 
@@ -2251,18 +2242,15 @@ static int tb_deinit(void) {
     }
 
     sigaction(SIGWINCH, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
-    if (global.resize_pipefd[0] >= 0)
-        close(global.resize_pipefd[0]);
-    if (global.resize_pipefd[1] >= 0)
-        close(global.resize_pipefd[1]);
+    if (global.resize_pipefd[0] >= 0) close(global.resize_pipefd[0]);
+    if (global.resize_pipefd[1] >= 0) close(global.resize_pipefd[1]);
 
     cellbuf_free(&global.back);
     cellbuf_free(&global.front);
     bytebuf_free(&global.in);
     bytebuf_free(&global.out);
 
-    if (global.terminfo)
-        tb_free(global.terminfo);
+    if (global.terminfo) tb_free(global.terminfo);
 
     cap_trie_deinit(&global.cap_trie);
 
@@ -2884,10 +2872,8 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         case TB_OUTPUT_216:
             cfg = fg & 0xff;
             cbg = bg & 0xff;
-            if (cfg > 216)
-                cfg = 216;
-            if (cbg > 216)
-                cbg = 216;
+            if (cfg > 216) cfg = 216;
+            if (cbg > 216) cbg = 216;
             cfg += 0x0f;
             cbg += 0x0f;
             break;
@@ -2895,10 +2881,8 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         case TB_OUTPUT_GRAYSCALE:
             cfg = fg & 0xff;
             cbg = bg & 0xff;
-            if (cfg > 24)
-                cfg = 24;
-            if (cbg > 24)
-                cbg = 24;
+            if (cfg > 24) cfg = 24;
+            if (cbg > 24) cbg = 24;
             cfg += 0xe7;
             cbg += 0xe7;
             break;
@@ -2957,8 +2941,10 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
     }
 #ifdef TB_OPT_TRUECOLOR
     if (global.output_mode == TB_OUTPUT_TRUECOLOR) {
-        fg_is_default = ((fg & 0xffffff) == 0) && ((fg & TB_TRUECOLOR_BLACK) == 0);
-        bg_is_default = ((bg & 0xffffff) == 0) && ((bg & TB_TRUECOLOR_BLACK) == 0);
+        fg_is_default =
+            ((fg & 0xffffff) == 0) && ((fg & TB_TRUECOLOR_BLACK) == 0);
+        bg_is_default =
+            ((bg & 0xffffff) == 0) && ((bg & TB_TRUECOLOR_BLACK) == 0);
     }
 #endif
 
