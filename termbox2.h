@@ -52,8 +52,10 @@ SOFTWARE.
 #include <unistd.h>
 #include <wchar.h>
 
-#ifndef PATH_MAX
-#define PATH_MAX 4096
+#ifdef PATH_MAX
+#define TB_PATH_MAX PATH_MAX
+#else
+#define TB_PATH_MAX 4096
 #endif
 
 #ifdef __cplusplus
@@ -2270,7 +2272,7 @@ static int tb_deinit(void) {
 
 static int load_terminfo(void) {
     int rv;
-    char tmp[PATH_MAX];
+    char tmp[TB_PATH_MAX];
 
     // See terminfo(5) "Fetching Compiled Descriptions" for a description of
     // this behavior. Some of these paths are compile-time ncurses options, so
@@ -2330,7 +2332,7 @@ static int load_terminfo(void) {
 
 static int load_terminfo_from_path(const char *path, const char *term) {
     int rv;
-    char tmp[PATH_MAX];
+    char tmp[TB_PATH_MAX];
 
     // Look for term at this terminfo location, e.g., <terminfo>/x/xterm
     snprintf_or_return(rv, tmp, sizeof(tmp), "%s/%c/%s", path, term[0], term);
