@@ -93,14 +93,20 @@ to submit PRs for other languages.)
 * Rust
 * Zig
 
+And elsewhere:
+
+* [Crystal](https://github.com/thmisch/termbox.cr)
+
 ### Examples
 
 * [mle][2] - flexible terminal-based text editor
 * [ictree][3] - like tree but interactive
 * [lavat][4] - lava lamp for the terminal
+* [termbox-tetris][5] - Tetris clone
 
 [0]: https://suckless.org
 [1]: https://github.com/termbox/termbox
 [2]: https://github.com/adsr/mle
 [3]: https://github.com/NikitaIvanovV/ictree
 [4]: https://github.com/AngelJumbo/lavat
+[5]: https://github.com/zacharygraber/termbox-tetris
