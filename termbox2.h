@@ -2017,6 +2017,9 @@ static int init_cap_trie(void) {
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
     struct cap_trie_t *next, *node = &global.cap_trie;
     size_t i, j;
+
+    if (!cap || strlen(cap) <= 0) return TB_OK; // Nothing to do for empty caps
+
     for (i = 0; cap[i] != '\0'; i++) {
         char c = cap[i];
         next = NULL;
@@ -3239,6 +3242,7 @@ static int cellbuf_resize(struct cellbuf_t *c, int w, int h) {
 }
 
 static int bytebuf_puts(struct bytebuf_t *b, const char *str) {
+    if (!str || strlen(str) <= 0) return TB_OK; // Nothing to do for empty caps
     return bytebuf_nputs(b, str, (size_t)strlen(str));
 }
 
