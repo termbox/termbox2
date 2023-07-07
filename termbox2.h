@@ -1395,7 +1395,8 @@ static int read_terminfo_path(const char *path);
 static int parse_terminfo_caps(void);
 static int load_builtin_caps(void);
 static const char *get_terminfo_string(int16_t str_offsets_pos,
-    int16_t str_table_pos, int16_t str_table_len, int16_t str_index);
+    int16_t str_offsets_len, int16_t str_table_pos, int16_t str_table_len,
+    int16_t str_index);
 static int wait_event(struct tb_event *event, int timeout);
 static int extract_event(struct tb_event *event);
 static int extract_esc(struct tb_event *event);
@@ -2410,8 +2411,8 @@ static int parse_terminfo_caps(void) {
     // Load caps
     int i;
     for (i = 0; i < TB_CAP__COUNT; i++) {
-        const char *cap = get_terminfo_string(pos_str_offsets, pos_str_table,
-            header[5], terminfo_cap_indexes[i]);
+        const char *cap = get_terminfo_string(pos_str_offsets, header[4],
+            pos_str_table, header[5], terminfo_cap_indexes[i]);
         if (!cap) {
             // Something is not right
             return TB_ERR;
@@ -2457,20 +2458,30 @@ static int load_builtin_caps(void) {
 }
 
 static const char *get_terminfo_string(int16_t str_offsets_pos,
-    int16_t str_table_pos, int16_t str_table_len, int16_t str_index) {
-    const int16_t *str_offset =
-        (int16_t *)(global.terminfo + (int)str_offsets_pos +
-                    ((int)str_index * (int)sizeof(int16_t)));
-    if (*str_offset < 0) {
-        // A negative indicates the cap is absent from this terminal
+    int16_t str_offsets_len, int16_t str_table_pos, int16_t str_table_len,
+    int16_t str_index) {
+    const int str_byte_index = (int)str_index * (int)sizeof(int16_t);
+    if (str_byte_index >= (int)str_offsets_len * (int)sizeof(int16_t)) {
+        // An offset beyond the table indicates absent
+        // See `convert_strings` in tinfo `read_entry.c`
         return "";
     }
-    if (*str_offset >= str_table_len) {
-        // Invalid string offset
+    const int16_t *str_offset =
+        (int16_t *)(global.terminfo + (int)str_offsets_pos + str_byte_index);
+    if ((char *)str_offset >= global.terminfo + global.nterminfo) {
+        // str_offset points beyond end of entry
+        // Truncated/corrupt terminfo entry?
         return NULL;
     }
+    if (*str_offset < 0 || *str_offset >= str_table_len) {
+        // A negative offset indicates absent
+        // An offset beyond the table indicates absent
+        // See `convert_strings` in tinfo `read_entry.c`
+        return "";
+    }
     if (((size_t)((int)str_table_pos + (int)*str_offset)) >= global.nterminfo) {
-        // Truncated/corrupt terminfo?
+        // string points beyond end of entry
+        // Truncated/corrupt terminfo entry?
         return NULL;
     }
     return (
