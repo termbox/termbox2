@@ -1996,20 +1996,26 @@ static int init_cap_trie(void) {
     int rv, i;
 
     // Add caps from terminfo or built-in
+    //
+    // Collisions are expected as some terminfo entries have dupes. (For
+    // example, att605-pc collides on TB_CAP_F4 and TB_CAP_DELETE.) First cap
+    // in TB_CAP_* index order will win.
+    //
+    // TODO Reorder TB_CAP_* so more critical caps come first.
     for (i = 0; i < TB_CAP__COUNT_KEYS; i++) {
-        if_err_return(rv, cap_trie_add(global.caps[i], tb_key_i(i), 0));
+        rv = cap_trie_add(global.caps[i], tb_key_i(i), 0);
+        if (rv != TB_OK && rv != TB_ERR_CAP_COLLISION) return rv;
     }
 
     // Add built-in mod caps
+    //
+    // Collisions are OK here as well. This can happen if global.caps collides
+    // with builtin_mod_caps. It is desirable to give precedence to global.caps
+    // here.
     for (i = 0; builtin_mod_caps[i].cap != NULL; i++) {
         rv = cap_trie_add(builtin_mod_caps[i].cap, builtin_mod_caps[i].key,
             builtin_mod_caps[i].mod);
-        // Collisions are OK. This can happen if global.caps collides with
-        // builtin_mod_caps. It is desirable to give precedence to global.caps
-        // here.
-        if (rv != TB_OK && rv != TB_ERR_CAP_COLLISION) {
-            return rv;
-        }
+        if (rv != TB_OK && rv != TB_ERR_CAP_COLLISION) return rv;
     }
 
     return TB_OK;
