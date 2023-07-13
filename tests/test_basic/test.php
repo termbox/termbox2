@@ -17,7 +17,7 @@ $has_version = is_string($version_str) && strlen($version_str) > 0;
 $test->ffi->tb_printf(0, $y++, 0, 0, "has_version=%s", $has_version ? 'y' : 'n');
 $test->ffi->tb_printf(0, $y++, $red, $bg, "width=%d", $w);
 $test->ffi->tb_printf(0, $y++, $green, $bg, "height=%d", $h);
-foreach (['TB_BOLD', 'TB_UNDERLINE', 'TB_ITALIC', 'TB_REVERSE'] as $attr) {
+foreach (['TB_BOLD', 'TB_UNDERLINE', 'TB_ITALIC', 'TB_REVERSE', 'TB_BRIGHT', 'TB_DIM'] as $attr) {
     $test->ffi->tb_printf(0, $y++, $blue | $test->defines[$attr], $bg, "attr=%s", $attr);
 }
 

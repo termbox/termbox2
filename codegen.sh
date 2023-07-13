@@ -50,6 +50,8 @@ read -r -d '' terminfo_funcs <<'EOD'
     rev   REVERSE
     smkx  ENTER_KEYPAD
     rmkx  EXIT_KEYPAD
+    dim   DIM
+    invis INVISIBLE
 EOD
 
 read -r -d '' extra_keys <<'EOD'

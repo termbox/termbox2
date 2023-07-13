@@ -4,3 +4,4 @@ libtermbox2.so*
 termbox2.ffi.h
 termbox2.h.lib
 demo/keyboard
+tests/**/observed.ansi

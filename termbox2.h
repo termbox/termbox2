@@ -64,16 +64,52 @@ extern "C" {
 
 // __ffi_start
 
-#define TB_VERSION_STR "2.2.0-dev"
+#define TB_VERSION_STR "2.4.0-dev"
+
+/* The following compile-time options are supported:
+ *
+ *     TB_OPT_ATTR_W: Integer width of fg and bg attributes. Valid values
+ *                    (assuming system support) are 16, 32, and 64. (See
+ *                    uintattr_t). 32 or 64 enables output mode
+ *                    TB_OUTPUT_TRUECOLOR. 64 enables additional style
+ *                    attributes. (See tb_set_output_mode.) Larger values
+ *                    consume more memory in exchange for more features.
+ *                    Defaults to 16.
+ *
+ *        TB_OPT_EGC: If set, enable extended grapheme cluster support
+ *                    (tb_extend_cell, tb_set_cell_ex). Consumes more memory.
+ *                    Defaults off.
+ *
+ * TB_OPT_PRINTF_BUF: Write buffer size for printf operations. Represents the
+ *                    largest string that can be sent in one call to tb_print*
+ *                    and tb_send* functions. Defaults to 4096.
+ *
+ *   TB_OPT_READ_BUF: Read buffer size for tty reads. Defaults to 64.
+ *
+ *  TB_OPT_TRUECOLOR: Deprecated. Sets TB_OPT_ATTR_W to 32 if not already set.
+ */
 
 #if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
-// Ensure consistent compile-time options when using as a library
-#undef TB_OPT_TRUECOLOR
+// Ensure consistent compile-time options when using as a shared library
+#undef TB_OPT_ATTR_W
 #undef TB_OPT_EGC
 #undef TB_OPT_PRINTF_BUF
 #undef TB_OPT_READ_BUF
-#define TB_OPT_TRUECOLOR
+#define TB_OPT_ATTR_W 64
 #define TB_OPT_EGC
+#endif
+
+// Ensure sane TB_OPT_ATTR_W (16, 32, or 64)
+#if defined TB_OPT_ATTR_W && TB_OPT_ATTR_W == 16
+#elif defined TB_OPT_ATTR_W && TB_OPT_ATTR_W == 32
+#elif defined TB_OPT_ATTR_W && TB_OPT_ATTR_W == 64
+#else
+#undef TB_OPT_ATTR_W
+#if defined TB_OPT_TRUECOLOR // Back-compat for old flag
+#define TB_OPT_ATTR_W 32
+#else
+#define TB_OPT_ATTR_W 16
+#endif
 #endif
 
 /* ASCII key constants (tb_event.key) */
@@ -126,7 +162,7 @@ extern "C" {
 #define tb_key_i(i)             0xffff - (i)
 /* Terminal-dependent key constants (tb_event.key) and terminfo capabilities */
 /* BEGIN codegen h */
-/* Produced by ./codegen.sh on Sun, 19 Sep 2021 01:02:02 +0000 */
+/* Produced by ./codegen.sh on Thu, 13 Jul 2023 05:46:13 +0000 */
 #define TB_KEY_F1               (0xffff - 0)
 #define TB_KEY_F2               (0xffff - 1)
 #define TB_KEY_F3               (0xffff - 2)
@@ -194,12 +230,17 @@ extern "C" {
 #define TB_CAP_REVERSE          33
 #define TB_CAP_ENTER_KEYPAD     34
 #define TB_CAP_EXIT_KEYPAD      35
-#define TB_CAP__COUNT           36
+#define TB_CAP_DIM              36
+#define TB_CAP_INVISIBLE        37
+#define TB_CAP__COUNT           38
 /* END codegen h */
 
 /* Some hard-coded caps */
 #define TB_HARDCAP_ENTER_MOUSE  "\x1b[?1000h\x1b[?1002h\x1b[?1015h\x1b[?1006h"
 #define TB_HARDCAP_EXIT_MOUSE   "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
+#define TB_HARDCAP_STRIKEOUT    "\x1b[9m"
+#define TB_HARDCAP_UNDERLINE_2  "\x1b[21m"
+#define TB_HARDCAP_OVERLINE     "\x1b[53m"
 
 /* Colors (numeric) and attributes (bitwise) (tb_cell.fg, tb_cell.bg) */
 #define TB_DEFAULT              0x0000
@@ -211,19 +252,39 @@ extern "C" {
 #define TB_MAGENTA              0x0006
 #define TB_CYAN                 0x0007
 #define TB_WHITE                0x0008
-#define TB_BOLD                 0x0100
-#define TB_UNDERLINE            0x0200
-#define TB_REVERSE              0x0400
-#define TB_ITALIC               0x0800
-#define TB_BLINK                0x1000
-#define TB_256_BLACK            0x2000
-#ifdef TB_OPT_TRUECOLOR
-#define TB_TRUECOLOR_BOLD      0x01000000
-#define TB_TRUECOLOR_UNDERLINE 0x02000000
-#define TB_TRUECOLOR_REVERSE   0x04000000
-#define TB_TRUECOLOR_ITALIC    0x08000000
-#define TB_TRUECOLOR_BLINK     0x10000000
-#define TB_TRUECOLOR_BLACK     0x20000000
+
+#if TB_OPT_ATTR_W == 16
+#define TB_BOLD      0x0100
+#define TB_UNDERLINE 0x0200
+#define TB_REVERSE   0x0400
+#define TB_ITALIC    0x0800
+#define TB_BLINK     0x1000
+#define TB_HI_BLACK  0x2000
+#define TB_BRIGHT    0x4000
+#define TB_DIM       0x8000
+#define TB_256_BLACK TB_HI_BLACK // TB_256_BLACK is deprecated
+#else // 32 or 64
+#define TB_BOLD                0x01000000
+#define TB_UNDERLINE           0x02000000
+#define TB_REVERSE             0x04000000
+#define TB_ITALIC              0x08000000
+#define TB_BLINK               0x10000000
+#define TB_HI_BLACK            0x20000000
+#define TB_BRIGHT              0x40000000
+#define TB_DIM                 0x80000000
+#define TB_TRUECOLOR_BOLD      TB_BOLD      // TB_TRUECOLOR_* is deprecated
+#define TB_TRUECOLOR_UNDERLINE TB_UNDERLINE
+#define TB_TRUECOLOR_REVERSE   TB_REVERSE
+#define TB_TRUECOLOR_ITALIC    TB_ITALIC
+#define TB_TRUECOLOR_BLINK     TB_BLINK
+#define TB_TRUECOLOR_BLACK     TB_HI_BLACK
+#endif
+
+#if TB_OPT_ATTR_W == 64
+#define TB_STRIKEOUT   0x0000000100000000
+#define TB_UNDERLINE_2 0x0000000200000000
+#define TB_OVERLINE    0x0000000400000000
+#define TB_INVISIBLE   0x0000000800000000
 #endif
 
 /* Event types (tb_event.type) */
@@ -249,7 +310,7 @@ extern "C" {
 #define TB_OUTPUT_256       2
 #define TB_OUTPUT_216       3
 #define TB_OUTPUT_GRAYSCALE 4
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W >= 32
 #define TB_OUTPUT_TRUECOLOR 5
 #endif
 
@@ -320,9 +381,11 @@ extern "C" {
 #define tb_free    free
 #endif
 
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W == 64
+typedef uint64_t uintattr_t;
+#elif TB_OPT_ATTR_W == 32
 typedef uint32_t uintattr_t;
-#else
+#else // 16
 typedef uint16_t uintattr_t;
 #endif
 
@@ -471,31 +534,37 @@ int tb_set_input_mode(int mode);
  *    terminal's default color).
  *
  *    Colors (including TB_DEFAULT) may be bitwise OR'd with attributes:
- *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC, TB_BLINK
+ *      TB_BOLD, TB_UNDERLINE, TB_REVERSE, TB_ITALIC, TB_BLINK, TB_BRIGHT,
+ *      TB_DIM
+ *
+ *    The following style attributes are also available if compiled with
+ *    TB_OPT_ATTR_W set to 64:
+ *      TB_STRIKEOUT, TB_UNDERLINE_2, TB_OVERLINE, TB_INVISIBLE
  *
  *    As in all modes, the value 0 is interpreted as TB_DEFAULT for
  *    convenience.
  *
  *    Some notes: TB_REVERSE can be applied as either fg or bg attributes for
- *    the same effect. TB_BOLD, TB_UNDERLINE, TB_ITALIC, TB_BLINK apply as fg
- *    attributes only, and are ignored as bg attributes.
+ *    the same effect. TB_BRIGHT can be applied to either fg or bg. The rest of
+ *    the attributes apply to fg only and are ignored as bg attributes.
  *
  *    Example usage:
  *      tb_set_cell(x, y, '@', TB_BLACK | TB_BOLD, TB_RED);
  *
- * 2. TB_OUTPUT_256        => [0..255] + TB_256_BLACK
+ * 2. TB_OUTPUT_256        => [0..255] + TB_HI_BLACK
  *
  *    In this mode you get 256 distinct colors (plus default):
  *                0x00   (1): TB_DEFAULT
- *        TB_256_BLACK   (1): TB_BLACK in TB_OUTPUT_NORMAL
+ *         TB_HI_BLACK   (1): TB_BLACK in TB_OUTPUT_NORMAL
  *          0x01..0x07   (7): the next 7 colors as in TB_OUTPUT_NORMAL
  *          0x08..0x0f   (8): bright versions of the above
  *          0x10..0xe7 (216): 216 different colors
  *          0xe8..0xff  (24): 24 different shades of gray
  *
- *    Attributes may be bitwise OR'd as in TB_OUTPUT_NORMAL.
+ *    All TB_* style attributes except TB_BRIGHT may be bitwise OR'd as in
+ *    TB_OUTPUT_NORMAL.
  *
- *    Note TB_256_BLACK must be used for black, as 0x00 represents default.
+ *    Note TB_HI_BLACK must be used for black, as 0x00 represents default.
  *
  * 3. TB_OUTPUT_216        => [0..216]
  *
@@ -511,13 +580,15 @@ int tb_set_input_mode(int mode);
  *                0x00   (1): TB_DEFAULT
  *          0x01..0x18  (24): 24 different shades of gray
  *
- * 5. TB_OUTPUT_TRUECOLOR  => [0x000000..0xffffff] + TB_TRUECOLOR_BLACK
+ * 5. TB_OUTPUT_TRUECOLOR  => [0x000000..0xffffff] + TB_HI_BLACK
  *
  *    This mode provides 24-bit color on supported terminals. The format is
- *    0xRRGGBB. Colors may be bitwise OR'd with TB_TRUECOLOR_* attributes.
+ *    0xRRGGBB.
  *
- *    Note TB_TRUECOLOR_BLACK must be used for black, as 0x000000 represents
- *    default.
+ *    All TB_* style attributes except TB_BRIGHT may be bitwise OR'd as in
+ *    TB_OUTPUT_NORMAL.
+ *
+ *    Note TB_HI_BLACK must be used for black, as 0x000000 represents default.
  *
  * If mode is TB_OUTPUT_CURRENT, the function returns the current output mode.
  *
@@ -539,7 +610,8 @@ int tb_set_input_mode(int mode);
  * Note, not all terminals support all output modes, especially beyond
  * TB_OUTPUT_NORMAL. There is also no very reliable way to determine color
  * support dynamically. If portability is desired, callers are recommended to
- * use TB_OUTPUT_NORMAL or make output mode end-user configurable.
+ * use TB_OUTPUT_NORMAL or make output mode end-user configurable. The same
+ * advice applies to style attributes.
  */
 int tb_set_output_mode(int mode);
 
@@ -595,6 +667,7 @@ const char *tb_strerror(int err);
 struct tb_cell *tb_cell_buffer(void);
 int tb_has_truecolor(void);
 int tb_has_egc(void);
+int tb_attr_width(void);
 const char *tb_version(void);
 
 #ifdef __cplusplus
@@ -689,7 +762,7 @@ struct tb_global_t {
 static struct tb_global_t global = {0};
 
 /* BEGIN codegen c */
-/* Produced by ./codegen.sh on Sun, 19 Sep 2021 01:02:03 +0000 */
+/* Produced by ./codegen.sh on Thu, 13 Jul 2023 05:46:13 +0000 */
 
 static const int16_t terminfo_cap_indexes[] = {
     66,  // kf1 (TB_CAP_F1)
@@ -728,6 +801,8 @@ static const int16_t terminfo_cap_indexes[] = {
     34,  // rev (TB_CAP_REVERSE)
     89,  // smkx (TB_CAP_ENTER_KEYPAD)
     88,  // rmkx (TB_CAP_EXIT_KEYPAD)
+    30,  // dim (TB_CAP_DIM)
+    32,  // invis (TB_CAP_INVISIBLE)
 };
 
 // xterm
@@ -768,6 +843,8 @@ static const char *xterm_caps[] = {
     "\033[7m",                 // rev (TB_CAP_REVERSE)
     "\033[?1h\033=",           // smkx (TB_CAP_ENTER_KEYPAD)
     "\033[?1l\033>",           // rmkx (TB_CAP_EXIT_KEYPAD)
+    "\033[2m",                 // dim (TB_CAP_DIM)
+    "\033[8m",                 // invis (TB_CAP_INVISIBLE)
 };
 
 // linux
@@ -794,7 +871,7 @@ static const char *linux_caps[] = {
     "\033[B",            // kcud1 (TB_CAP_ARROW_DOWN)
     "\033[D",            // kcub1 (TB_CAP_ARROW_LEFT)
     "\033[C",            // kcuf1 (TB_CAP_ARROW_RIGHT)
-    "\033[Z",            // kcbt (TB_CAP_BACK_TAB)
+    "\033\011",          // kcbt (TB_CAP_BACK_TAB)
     "",                  // smcup (TB_CAP_ENTER_CA)
     "",                  // rmcup (TB_CAP_EXIT_CA)
     "\033[?25h\033[?0c", // cnorm (TB_CAP_SHOW_CURSOR)
@@ -808,6 +885,8 @@ static const char *linux_caps[] = {
     "\033[7m",           // rev (TB_CAP_REVERSE)
     "",                  // smkx (TB_CAP_ENTER_KEYPAD)
     "",                  // rmkx (TB_CAP_EXIT_KEYPAD)
+    "\033[2m",           // dim (TB_CAP_DIM)
+    "",                  // invis (TB_CAP_INVISIBLE)
 };
 
 // screen
@@ -848,6 +927,8 @@ static const char *screen_caps[] = {
     "\033[7m",           // rev (TB_CAP_REVERSE)
     "\033[?1h\033=",     // smkx (TB_CAP_ENTER_KEYPAD)
     "\033[?1l\033>",     // rmkx (TB_CAP_EXIT_KEYPAD)
+    "\033[2m",           // dim (TB_CAP_DIM)
+    "",                  // invis (TB_CAP_INVISIBLE)
 };
 
 // rxvt-256color
@@ -888,6 +969,8 @@ static const char *rxvt_256color_caps[] = {
     "\033[7m",               // rev (TB_CAP_REVERSE)
     "\033=",                 // smkx (TB_CAP_ENTER_KEYPAD)
     "\033>",                 // rmkx (TB_CAP_EXIT_KEYPAD)
+    "",                      // dim (TB_CAP_DIM)
+    "",                      // invis (TB_CAP_INVISIBLE)
 };
 
 // rxvt-unicode
@@ -928,6 +1011,8 @@ static const char *rxvt_unicode_caps[] = {
     "\033[7m",            // rev (TB_CAP_REVERSE)
     "\033=",              // smkx (TB_CAP_ENTER_KEYPAD)
     "\033>",              // rmkx (TB_CAP_EXIT_KEYPAD)
+    "",                   // dim (TB_CAP_DIM)
+    "",                   // invis (TB_CAP_INVISIBLE)
 };
 
 // Eterm
@@ -968,6 +1053,8 @@ static const char *eterm_caps[] = {
     "\033[7m",               // rev (TB_CAP_REVERSE)
     "",                      // smkx (TB_CAP_ENTER_KEYPAD)
     "",                      // rmkx (TB_CAP_EXIT_KEYPAD)
+    "",                      // dim (TB_CAP_DIM)
+    "",                      // invis (TB_CAP_INVISIBLE)
 };
 
 static struct {
@@ -1406,7 +1493,7 @@ static int extract_esc_mouse(struct tb_event *event);
 static int resize_cellbufs(void);
 static void handle_resize(int sig);
 static int send_attr(uintattr_t fg, uintattr_t bg);
-static int send_sgr(uintattr_t fg, uintattr_t bg, int fg_is_default,
+static int send_sgr(uint32_t fg, uint32_t bg, int fg_is_default,
     int bg_is_default);
 static int send_cursor_if(int x, int y);
 static int send_char(int x, int y, uint32_t ch);
@@ -1686,7 +1773,7 @@ int tb_set_output_mode(int mode) {
         case TB_OUTPUT_256:
         case TB_OUTPUT_216:
         case TB_OUTPUT_GRAYSCALE:
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W >= 32
         case TB_OUTPUT_TRUECOLOR:
 #endif
             global.last_fg = ~global.fg;
@@ -1905,7 +1992,7 @@ const char *tb_strerror(int err) {
 }
 
 int tb_has_truecolor(void) {
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W >= 32
     return 1;
 #else
     return 0;
@@ -1918,6 +2005,10 @@ int tb_has_egc(void) {
 #else
     return 0;
 #endif
+}
+
+int tb_attr_width(void) {
+    return TB_OPT_ATTR_W;
 }
 
 const char *tb_version(void) {
@@ -2874,19 +2965,23 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
 
     if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]));
 
-    uintattr_t cfg, cbg;
+    uint32_t cfg, cbg;
     switch (global.output_mode) {
         default:
         case TB_OUTPUT_NORMAL:
-            cfg = fg & 0x0f;
-            cbg = bg & 0x0f;
+            // The minus 1 below is because our colors are 1-indexed starting
+            // from black. Black is represented by a 30, 40, 90, or 100 for fg,
+            // bg, bright fg, or bright bg respectively. Red is 31, 41, 91,
+            // 101, etc.
+            cfg = (fg & TB_BRIGHT ? 90 : 30) + (fg & 0x0f) - 1;
+            cbg = (bg & TB_BRIGHT ? 100 : 40) + (bg & 0x0f) - 1;
             break;
 
         case TB_OUTPUT_256:
             cfg = fg & 0xff;
             cbg = bg & 0xff;
-            if (fg & TB_256_BLACK) cfg = 0;
-            if (bg & TB_256_BLACK) cbg = 0;
+            if (fg & TB_HI_BLACK) cfg = 0;
+            if (bg & TB_HI_BLACK) cbg = 0;
             break;
 
         case TB_OUTPUT_216:
@@ -2907,64 +3002,62 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
             cbg += 0xe7;
             break;
 
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W >= 32
         case TB_OUTPUT_TRUECOLOR:
             cfg = fg & 0xffffff;
             cbg = bg & 0xffffff;
-            if (fg & TB_TRUECOLOR_BLACK) cfg = 0;
-            if (bg & TB_TRUECOLOR_BLACK) cbg = 0;
+            if (fg & TB_HI_BLACK) cfg = 0;
+            if (bg & TB_HI_BLACK) cbg = 0;
             break;
 #endif
     }
 
-    uintattr_t attr_bold, attr_blink, attr_italic, attr_underline, attr_reverse;
-#ifdef TB_OPT_TRUECOLOR
-    if (global.output_mode == TB_OUTPUT_TRUECOLOR) {
-        attr_bold = TB_TRUECOLOR_BOLD;
-        attr_blink = TB_TRUECOLOR_BLINK;
-        attr_italic = TB_TRUECOLOR_ITALIC;
-        attr_underline = TB_TRUECOLOR_UNDERLINE;
-        attr_reverse = TB_TRUECOLOR_REVERSE;
-    } else
-#endif
-    {
-        attr_bold = TB_BOLD;
-        attr_blink = TB_BLINK;
-        attr_italic = TB_ITALIC;
-        attr_underline = TB_UNDERLINE;
-        attr_reverse = TB_REVERSE;
-    }
-
-    if (fg & attr_bold)
+    if (fg & TB_BOLD)
         if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
 
-    if (fg & attr_blink)
+    if (fg & TB_BLINK)
         if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
 
-    if (fg & attr_underline)
+    if (fg & TB_UNDERLINE)
         if_err_return(rv,
             bytebuf_puts(&global.out, global.caps[TB_CAP_UNDERLINE]));
 
-    if (fg & attr_italic)
+    if (fg & TB_ITALIC)
         if_err_return(rv,
             bytebuf_puts(&global.out, global.caps[TB_CAP_ITALIC]));
 
-    if ((fg & attr_reverse) || (bg & attr_reverse))
+    if (fg & TB_DIM)
+        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_DIM]));
+
+#if TB_OPT_ATTR_W == 64
+    if (fg & TB_STRIKEOUT)
+        if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_STRIKEOUT));
+
+    if (fg & TB_UNDERLINE_2)
+        if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_UNDERLINE_2));
+
+    if (fg & TB_OVERLINE)
+        if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_OVERLINE));
+
+    if (fg & TB_INVISIBLE)
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_INVISIBLE]));
+#endif
+
+    if ((fg & TB_REVERSE) || (bg & TB_REVERSE))
         if_err_return(rv,
             bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
 
     int fg_is_default = (fg & 0xff) == 0;
     int bg_is_default = (bg & 0xff) == 0;
     if (global.output_mode == TB_OUTPUT_256) {
-        if (fg & TB_256_BLACK) fg_is_default = 0;
-        if (bg & TB_256_BLACK) bg_is_default = 0;
+        if (fg & TB_HI_BLACK) fg_is_default = 0;
+        if (bg & TB_HI_BLACK) bg_is_default = 0;
     }
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W >= 32
     if (global.output_mode == TB_OUTPUT_TRUECOLOR) {
-        fg_is_default =
-            ((fg & 0xffffff) == 0) && ((fg & TB_TRUECOLOR_BLACK) == 0);
-        bg_is_default =
-            ((bg & 0xffffff) == 0) && ((bg & TB_TRUECOLOR_BLACK) == 0);
+        fg_is_default = ((fg & 0xffffff) == 0) && ((fg & TB_HI_BLACK) == 0);
+        bg_is_default = ((bg & 0xffffff) == 0) && ((bg & TB_HI_BLACK) == 0);
     }
 #endif
 
@@ -2976,7 +3069,7 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
     return TB_OK;
 }
 
-static int send_sgr(uintattr_t cfg, uintattr_t cbg, int fg_is_default,
+static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
     int bg_is_default) {
     int rv;
     char nbuf[32];
@@ -2990,15 +3083,13 @@ static int send_sgr(uintattr_t cfg, uintattr_t cbg, int fg_is_default,
         case TB_OUTPUT_NORMAL:
             send_literal(rv, "\x1b[");
             if (!fg_is_default) {
-                send_literal(rv, "3");
-                send_num(rv, nbuf, cfg - 1);
+                send_num(rv, nbuf, cfg);
                 if (!bg_is_default) {
                     send_literal(rv, ";");
                 }
             }
             if (!bg_is_default) {
-                send_literal(rv, "4");
-                send_num(rv, nbuf, cbg - 1);
+                send_num(rv, nbuf, cbg);
             }
             send_literal(rv, "m");
             break;
@@ -3021,7 +3112,7 @@ static int send_sgr(uintattr_t cfg, uintattr_t cbg, int fg_is_default,
             send_literal(rv, "m");
             break;
 
-#ifdef TB_OPT_TRUECOLOR
+#if TB_OPT_ATTR_W >= 32
         case TB_OUTPUT_TRUECOLOR:
             send_literal(rv, "\x1b[");
             if (!fg_is_default) {

@@ -29,7 +29,7 @@ function test_mode($test, string $mode, int $n, int $w, int &$x, int &$y): void 
             if ($fg === 0) {
                 $cfg = $attr_default;
             } else if ($fg === 1) {
-                $cfg = $test->defines['TB_256_BLACK'];
+                $cfg = $test->defines['TB_HI_BLACK'];
             } else {
                 $cfg = $fg - 1;
             }

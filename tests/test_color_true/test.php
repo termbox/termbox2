@@ -6,11 +6,11 @@ if (!$test->ffi->tb_has_truecolor()) {
     $test->skip();
 }
 
-$attr_bold = $test->defines['TB_TRUECOLOR_BOLD'];
-$attr_underline = $test->defines['TB_TRUECOLOR_UNDERLINE'];
-$attr_italic = $test->defines['TB_TRUECOLOR_ITALIC'];
+$attr_bold = $test->defines['TB_BOLD'];
+$attr_underline = $test->defines['TB_UNDERLINE'];
+$attr_italic = $test->defines['TB_ITALIC'];
 $attr_default = $test->defines['TB_DEFAULT'];
-$true_black = $test->defines['TB_TRUECOLOR_BLACK'];
+$true_black = $test->defines['TB_HI_BLACK'];
 
 $css_colors = [
     'antiquewhite'         => [ 0xfaebd7, $attr_default ],
