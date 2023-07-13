@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-if (!$test->ffi->tb_attr_width() >= 64) {
+if ($test->ffi->tb_attr_width() !== 64) {
     // This will only work with 64-bit attrs
     $test->skip();
 }

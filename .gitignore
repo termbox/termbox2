@@ -2,6 +2,7 @@ termbox2.o
 libtermbox2.a
 libtermbox2.so*
 termbox2.ffi.h
+termbox2.ffi.macro
 termbox2.h.lib
 demo/keyboard
 tests/**/observed.ansi

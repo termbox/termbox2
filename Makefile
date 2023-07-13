@@ -5,6 +5,7 @@ termbox_demos:=$(patsubst demo/%.c,demo/%,$(wildcard demo/*.c))
 termbox_h:=termbox2.h
 termbox_h_lib:=termbox2.h.lib
 termbox_ffi_h:=termbox2.ffi.h
+termbox_ffi_macro:=termbox2.ffi.macro
 termbox_o:=termbox2.o
 termbox_so_version_abi:=2
 termbox_so_version_minor_patch:=0.0
@@ -44,6 +45,9 @@ $(termbox_a): $(termbox_o)
 $(termbox_ffi_h): $(termbox_h)
 	awk '/__ffi_start/{p=1} p==1 || /__TERMBOX_H/{print}' $^ | $(CC) -DTB_LIB_OPTS $(termbox_cflags) -P -E - >$@
 
+$(termbox_ffi_macro): $(termbox_h)
+	awk '/__ffi_start/{p=1} p==1 || /__TERMBOX_H/{print}' $^ | $(CC) -DTB_LIB_OPTS $(termbox_cflags) -P -E -dM - >$@
+
 $(termbox_h_lib): $(termbox_h)
 	sed 's|0 // __tb_lib_opts|1 // __tb_lib_opts|' $(termbox_h) >$@
 
@@ -54,10 +58,10 @@ terminfo:
 format:
 	clang-format -i termbox2.h
 
-test: $(termbox_so) $(termbox_ffi_h)
+test: $(termbox_so) $(termbox_ffi_h) $(termbox_ffi_macro)
 	docker build -f tests/Dockerfile --build-arg=cflags="$(termbox_cflags)" .
 
-test_local: $(termbox_so) $(termbox_ffi_h)
+test_local: $(termbox_so) $(termbox_ffi_h) $(termbox_ffi_macro)
 	./tests/run.sh
 
 install:
@@ -92,6 +96,6 @@ install_so: $(termbox_so_x_y_z)
 	ln -sf $(termbox_so_x_y_z) $(DESTDIR)$(prefix)/lib/$(termbox_so)
 
 clean:
-	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x) $(termbox_so_x_y_z) $(termbox_ffi_h) $(termbox_h_lib) tests/**/observed.ansi
+	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x) $(termbox_so_x_y_z) $(termbox_ffi_h) $(termbox_ffi_macro) $(termbox_h_lib) tests/**/observed.ansi
 
 .PHONY: all lib terminfo format test test_local install install_lib install_h install_h_lib install_a install_so clean
