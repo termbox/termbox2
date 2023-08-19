@@ -15,7 +15,6 @@ stand-alone shared or static library.
 ```c
 #define TB_IMPL
 #include "termbox2.h"
-#include <stdio.h>
 
 int main(int argc, char **argv) {
     struct tb_event ev;
@@ -80,10 +79,10 @@ As mentioned above, there are two options:
 2. Build termbox2 as a library (either `make libtermbox2.so` or
    `make libtermbox2.a`) and link as normal.
 
-### Language bindings (FFI and ABI compats)
+### Language bindings
 
-Basic examples in the languages below are in the `demo/` directory. (Feel free
-to submit PRs for other languages.)
+Basic FFI examples in the languages below are in the `demo/` directory. (Feel
+free to submit PRs for other languages.)
 
 * D
 * Go
@@ -93,9 +92,12 @@ to submit PRs for other languages.)
 * Rust
 * Zig
 
-And elsewhere:
+Other wrapper libraries:
 
-* [Crystal](https://github.com/thmisch/termbox.cr)
+* [termbox.cr (Crystal)](https://github.com/thmisch/termbox.cr)
+* [termbox2.cr (Crystal)](https://github.com/homonoidian/termbox2.cr)
+* [Termbox.pm (Perl)](https://github.com/sanko/Termbox.pm)
+* [termbox2-hs (Haskell)](https://github.com/gatlin/termbox2-hs)
 
 ### Examples
 
@@ -103,6 +105,9 @@ And elsewhere:
 * [ictree][3] - like tree but interactive
 * [lavat][4] - lava lamp for the terminal
 * [termbox-tetris][5] - Tetris clone
+* [dvd-screensaver][6] - a terminal screensaver
+* [matrix-tui][7] - Matrix client
+* [Vgmi][8] - Gemini client
 
 [0]: https://suckless.org
 [1]: https://github.com/termbox/termbox
@@ -110,3 +115,6 @@ And elsewhere:
 [3]: https://github.com/NikitaIvanovV/ictree
 [4]: https://github.com/AngelJumbo/lavat
 [5]: https://github.com/zacharygraber/termbox-tetris
+[6]: https://github.com/yamin-shihab/dvd-screensaver
+[7]: https://github.com/git-bruh/matrix-tui
+[8]: https://github.com/RealMelkor/Vgmi
