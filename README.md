@@ -108,6 +108,7 @@ Other wrapper libraries:
 * [dvd-screensaver][6] - a terminal screensaver
 * [matrix-tui][7] - Matrix client
 * [Vgmi][8] - Gemini client
+* [poe][9] - `.po` file editor
 
 [0]: https://suckless.org
 [1]: https://github.com/termbox/termbox
@@ -118,3 +119,4 @@ Other wrapper libraries:
 [6]: https://github.com/yamin-shihab/dvd-screensaver
 [7]: https://github.com/git-bruh/matrix-tui
 [8]: https://github.com/RealMelkor/Vgmi
+[9]: https://sr.ht/~strahinja/poe/
