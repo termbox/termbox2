@@ -86,6 +86,7 @@ free to submit PRs for other languages.)
 
 * D
 * Go
+* Nim
 * PHP
 * Python
 * Ruby
