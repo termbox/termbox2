@@ -43,6 +43,10 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <windows.h>
+#include <synchapi.h>
+#else
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -50,6 +54,7 @@ SOFTWARE.
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
+#endif
 #include <wchar.h>
 
 #ifdef PATH_MAX
@@ -110,6 +115,10 @@ extern "C" {
 #else
 #define TB_OPT_ATTR_W 16
 #endif
+#endif
+
+#ifndef TB_RESIZE_FALLBACK_MS
+#define TB_RESIZE_FALLBACK_MS 1000
 #endif
 
 /* ASCII key constants (tb_event.key) */
@@ -343,6 +352,13 @@ extern "C" {
 #define TB_ERR_RESIZE_READ      -20
 #define TB_ERR_RESIZE_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
+#ifdef _WIN32
+#define TB_ERR_WIN_UNSUPPORTED  -1000
+#define TB_ERR_WIN_NO_STDIO     -1001
+#define TB_ERR_WIN_SET_CONMODE  -1002
+#define TB_ERR_WIN_GET_CONMODE  -1003
+#define TB_ERR_WIN_RESIZE       -1004
+#endif
 
 #define TB_ERR_SELECT           TB_ERR_POLL
 #define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
@@ -730,6 +746,15 @@ struct tb_global_t {
     int wfd;
     int ttyfd_open;
     int resize_pipefd[2];
+#ifdef _WIN32
+    HANDLE hin;
+    HANDLE hout;
+    DWORD orig_mode_out;
+    DWORD orig_mode_in;
+#else
+    struct termios orig_tios;
+#endif
+    int has_orig_tios;
     int width;
     int height;
     int cursor_x;
@@ -750,8 +775,6 @@ struct tb_global_t {
     struct bytebuf_t out;
     struct cellbuf_t back;
     struct cellbuf_t front;
-    struct termios orig_tios;
-    int has_orig_tios;
     int last_errno;
     int initialized;
     int (*fn_extract_esc_pre)(struct tb_event *, size_t *);
@@ -1518,13 +1541,20 @@ static int bytebuf_reserve(struct bytebuf_t *b, size_t sz);
 static int bytebuf_free(struct bytebuf_t *b);
 
 int tb_init(void) {
+#ifdef _WIN32
+    return tb_init_rwfd(-1, -1);
+#else
     return tb_init_file("/dev/tty");
+#endif
 }
 
 int tb_init_file(const char *path) {
     if (global.initialized) {
         return TB_ERR_INIT_ALREADY;
     }
+#ifdef _WIN32
+    return TB_ERR_WIN_UNSUPPORTED;
+#else
     int ttyfd = open(path, O_RDWR);
     if (ttyfd < 0) {
         global.last_errno = errno;
@@ -1532,9 +1562,13 @@ int tb_init_file(const char *path) {
     }
     global.ttyfd_open = 1;
     return tb_init_fd(ttyfd);
+#endif
 }
 
 int tb_init_fd(int ttyfd) {
+#ifdef _WIN32
+    return TB_ERR_WIN_UNSUPPORTED;
+#endif
     return tb_init_rwfd(ttyfd, ttyfd);
 }
 
@@ -1542,9 +1576,25 @@ int tb_init_rwfd(int rfd, int wfd) {
     int rv;
 
     tb_reset();
+
+#ifdef _WIN32
+    if (rfd != -1 && wfd != -1) {
+        return TB_ERR_WIN_UNSUPPORTED;
+    }
+    global.hin = GetStdHandle(STD_INPUT_HANDLE);
+    global.hout = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (  !global.hin || !global.hout
+        || global.hin == INVALID_HANDLE_VALUE
+        || global.hout == INVALID_HANDLE_VALUE
+    ) {
+        return TB_ERR_WIN_NO_STDIO;
+    }
+    global.wfd = 1;
+#else
     global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
     global.rfd = rfd;
     global.wfd = wfd;
+#endif
 
     do {
         if_err_break(rv, init_term_attrs());
@@ -1612,6 +1662,9 @@ int tb_present(void) {
 
             int w;
             {
+#ifdef _WIN32
+                w = 1; // TODO wcwidth for Windows?
+#else
 #ifdef TB_OPT_EGC
                 if (back->nech > 0)
                     w = wcswidth((wchar_t *)back->ech, back->nech);
@@ -1619,6 +1672,7 @@ int tb_present(void) {
 #endif
                     /* wcwidth() simply returns -1 on overflow of wchar_t */
                     w = wcwidth((wchar_t)back->ch);
+#endif
             }
             if (w < 1) {
                 w = 1;
@@ -1797,6 +1851,10 @@ int tb_poll_event(struct tb_event *event) {
 int tb_get_fds(int *ttyfd, int *resizefd) {
     if_not_init_return();
 
+#ifdef _WIN32
+    return TB_ERR_WIN_UNSUPPORTED;
+#endif
+
     *ttyfd = global.rfd;
     *resizefd = global.resize_pipefd[0];
 
@@ -1817,7 +1875,11 @@ int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
     }
     while (*str) {
         str += tb_utf8_char_to_unicode(&uni, str);
+#ifdef _WIN32
+        w = 1; // TODO wcwidth on Windows?
+#else
         w = wcwidth((wchar_t)uni);
+#endif
         if (w < 0) {
             w = 1;
         }
@@ -1973,6 +2035,18 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_SSCANF:
             return "Terminal width/height not received by sscanf() after "
                    "resize";
+#ifdef _WIN32
+        case TB_ERR_WIN_UNSUPPORTED:
+            return "Unsupported on Windows";
+        case TB_ERR_WIN_NO_STDIO:
+            return "Stdio not available";
+        case TB_ERR_WIN_SET_CONMODE:
+            return "Failed to set console mode";
+        case TB_ERR_WIN_GET_CONMODE:
+            return "Failed to get console mode";
+        case TB_ERR_WIN_RESIZE:
+            return "Failed to resize console";
+#endif
         case TB_ERR:
         case TB_ERR_INIT_OPEN:
         case TB_ERR_READ:
@@ -1986,8 +2060,12 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_POLL:
         case TB_ERR_RESIZE_READ:
         default:
+#ifdef _WIN32
+            return "Unknown error on Windows";
+#else
             strerror_r(global.last_errno, global.errbuf, sizeof(global.errbuf));
             return (const char *)global.errbuf;
+#endif
     }
 }
 
@@ -2040,6 +2118,19 @@ static int tb_reset(void) {
 }
 
 static int init_term_attrs(void) {
+#ifdef _WIN32
+    if (   !SetConsoleCP(CP_UTF8)
+        || !SetConsoleOutputCP(CP_UTF8)) {
+        return TB_ERR_WIN_SET_CONMODE;
+    } else if (!GetConsoleMode(global.hin, &global.orig_mode_in)
+            || !GetConsoleMode(global.hout, &global.orig_mode_out)
+            || !(global.has_orig_tios = 1)) {
+        return TB_ERR_WIN_GET_CONMODE;
+    } else if (!SetConsoleMode(global.hin, ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_VIRTUAL_TERMINAL_INPUT)
+            || !SetConsoleMode(global.hout, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN)) {
+        return TB_ERR_WIN_SET_CONMODE;
+    }
+#else
     if (global.ttyfd < 0) {
         return TB_OK;
     }
@@ -2061,7 +2152,7 @@ static int init_term_attrs(void) {
         global.last_errno = errno;
         return TB_ERR_TCSETATTR;
     }
-
+#endif
     return TB_OK;
 }
 
@@ -2201,6 +2292,9 @@ static int cap_trie_deinit(struct cap_trie_t *node) {
 }
 
 static int init_resize_handler(void) {
+#ifdef _WIN32
+    return TB_OK;
+#else
     if (pipe(global.resize_pipefd) != 0) {
         global.last_errno = errno;
         return TB_ERR_RESIZE_PIPE;
@@ -2213,8 +2307,8 @@ static int init_resize_handler(void) {
         global.last_errno = errno;
         return TB_ERR_RESIZE_SIGACTION;
     }
-
     return TB_OK;
+#endif
 }
 
 static int send_init_escape_codes(void) {
@@ -2244,6 +2338,18 @@ static int send_clear(void) {
 }
 
 static int update_term_size(void) {
+#ifdef _WIN32
+    CONSOLE_SCREEN_BUFFER_INFO info;
+
+    if (!GetConsoleScreenBufferInfo(global.hout, &info)) {
+        return TB_ERR_WIN_RESIZE;
+    }
+
+    global.width = info.dwSize.X;
+    global.height = info.dwSize.Y;
+
+    return TB_OK;
+#else
     int rv, ioctl_errno;
 
     if (global.ttyfd < 0) {
@@ -2266,13 +2372,13 @@ static int update_term_size(void) {
 
     global.last_errno = ioctl_errno;
     return TB_ERR_RESIZE_IOCTL;
+#endif
 }
 
 static int update_term_size_via_esc(void) {
-#ifndef TB_RESIZE_FALLBACK_MS
-#define TB_RESIZE_FALLBACK_MS 1000
-#endif
-
+#ifdef _WIN32
+    return TB_ERR;
+#else
     char *move_and_report = "\x1b[9999;9999H\x1b[6n";
     ssize_t write_rv =
         write(global.wfd, move_and_report, strlen(move_and_report));
@@ -2311,6 +2417,7 @@ static int update_term_size_via_esc(void) {
     global.width = rw;
     global.height = rh;
     return TB_OK;
+#endif
 }
 
 static int init_cellbuf(void) {
@@ -2332,6 +2439,13 @@ static int tb_deinit(void) {
         bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
         bytebuf_flush(&global.out, global.wfd);
     }
+
+#ifdef _WIN32
+    if (global.has_orig_tios) {
+        SetConsoleMode(global.hin, global.orig_mode_in);
+        SetConsoleMode(global.hout, global.orig_mode_out);
+    }
+#else
     if (global.ttyfd >= 0) {
         if (global.has_orig_tios) {
             tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
@@ -2345,6 +2459,7 @@ static int tb_deinit(void) {
     sigaction(SIGWINCH, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
     if (global.resize_pipefd[0] >= 0) close(global.resize_pipefd[0]);
     if (global.resize_pipefd[1] >= 0) close(global.resize_pipefd[1]);
+#endif
 
     cellbuf_free(&global.back);
     cellbuf_free(&global.front);
@@ -2362,6 +2477,10 @@ static int tb_deinit(void) {
 static int load_terminfo(void) {
     int rv;
     char tmp[TB_PATH_MAX];
+
+#ifdef _WIN32
+    return TB_ERR; // Use built-in xterm caps on Windows
+#endif
 
     // See terminfo(5) "Fetching Compiled Descriptions" for a description of
     // this behavior. Some of these paths are compile-time ncurses options, so
@@ -2437,6 +2556,9 @@ static int load_terminfo_from_path(const char *path, const char *term) {
 }
 
 static int read_terminfo_path(const char *path) {
+#ifdef _WIN32
+    return TB_ERR;
+#else
     FILE *fp = fopen(path, "rb");
     if (!fp) {
         return TB_ERR;
@@ -2466,6 +2588,7 @@ static int read_terminfo_path(const char *path) {
 
     fclose(fp);
     return TB_OK;
+#endif
 }
 
 static int parse_terminfo_caps(void) {
@@ -2522,7 +2645,12 @@ static int parse_terminfo_caps(void) {
 
 static int load_builtin_caps(void) {
     int i, j;
+
+#ifdef _WIN32
+    const char *term = "xterm-256color"; // Use xterm caps on Windows
+#else
     const char *term = getenv("TERM");
+#endif
 
     if (!term) {
         return TB_ERR_NO_TERM;
@@ -2586,6 +2714,55 @@ static const char *get_terminfo_string(int16_t str_offsets_pos,
 }
 
 static int wait_event(struct tb_event *event, int timeout) {
+#ifdef _WIN32
+    int rv;
+    INPUT_RECORD buf[TB_OPT_READ_BUF];
+
+    memset(event, 0, sizeof(*event));
+    if_ok_return(rv, extract_event(event));
+
+    do {
+        DWORD wait_rv = WaitForSingleObject(global.hin, (DWORD)timeout);
+        if (wait_rv == WAIT_TIMEOUT) {
+            return TB_ERR_NO_EVENT;
+        } else if (wait_rv != WAIT_OBJECT_0) {
+            return TB_ERR_POLL;
+        }
+
+        DWORD nevent = 0;
+        if (!ReadConsoleInputA(global.hin, buf, TB_OPT_READ_BUF, &nevent)) {
+            return TB_ERR_READ;
+        }
+
+        DWORD i;
+        for (i = 0; i < nevent; i++) {
+            if (buf[i].EventType == KEY_EVENT) {
+                if (buf[i].Event.KeyEvent.bKeyDown &&
+                    buf[i].Event.KeyEvent.uChar.AsciiChar != 0)
+                {
+                    bytebuf_nputs(&global.in,
+                        &(buf[i].Event.KeyEvent.uChar.AsciiChar), 1);
+                }
+            }
+        }
+
+        for (i = 0; i < nevent; i++) {
+            if (buf[i].EventType == WINDOW_BUFFER_SIZE_EVENT) {
+                if_err_return(rv, update_term_size());
+                if_err_return(rv, resize_cellbufs());
+                event->type = TB_EVENT_RESIZE;
+                event->w = global.width;
+                event->h = global.height;
+                return TB_OK;
+            }
+        }
+
+        memset(event, 0, sizeof(*event));
+        if_ok_return(rv, extract_event(event));
+    } while (timeout == -1);
+
+    return rv;
+#else
     int rv;
     char buf[TB_OPT_READ_BUF];
 
@@ -2647,6 +2824,7 @@ static int wait_event(struct tb_event *event, int timeout) {
     } while (timeout == -1);
 
     return rv;
+#endif
 }
 
 static int extract_event(struct tb_event *event) {
@@ -2951,9 +3129,13 @@ static int resize_cellbufs(void) {
 }
 
 static void handle_resize(int sig) {
+#ifdef _WIN32
+    (void)sig;
+#else
     int errno_copy = errno;
     write(global.resize_pipefd[1], &sig, sizeof(sig));
     errno = errno_copy;
+#endif
 }
 
 static int send_attr(uintattr_t fg, uintattr_t bg) {
@@ -3377,12 +3559,19 @@ static int bytebuf_flush(struct bytebuf_t *b, int fd) {
     if (b->len <= 0) {
         return TB_OK;
     }
+#ifdef _WIN32
+    DWORD nw;
+    if (!WriteConsoleA(global.hout, b->buf, (DWORD)b->len, &nw, NULL) || nw != b->len) {
+        return TB_ERR;
+    }
+#else
     ssize_t write_rv = write(fd, b->buf, b->len);
     if (write_rv < 0 || (size_t)write_rv != b->len) {
         // Note, errno will be 0 on partial write
         global.last_errno = errno;
         return TB_ERR;
     }
+#endif
     b->len = 0;
     return TB_OK;
 }
