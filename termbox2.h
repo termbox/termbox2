@@ -411,13 +411,13 @@ typedef uint16_t uintattr_t;
  * See tb_present() for implementation.
  */
 struct tb_cell {
-    uint32_t ch;   /* a Unicode character */
+    uint32_t ch;   /* a Unicode code point */
     uintattr_t fg; /* bitwise foreground attributes */
     uintattr_t bg; /* bitwise background attributes */
 #ifdef TB_OPT_EGC
-    uint32_t *ech; /* a grapheme cluster of Unicode code points */
-    size_t nech;   /* length in bytes of ech, 0 means use ch instead of ech */
-    size_t cech;   /* capacity in bytes of ech */
+    uint32_t *ech; /* a grapheme cluster of Unicode code points, 0-terminated */
+    size_t nech;   /* num elements in ech, 0 means use ch instead of ech */
+    size_t cech;   /* num elements allocated for ech */
 #endif
 };
 
@@ -3232,7 +3232,7 @@ static int cell_set(struct tb_cell *cell, uint32_t *ch, size_t nch,
     } else {
         int rv;
         if_err_return(rv, cell_reserve_ech(cell, nch + 1));
-        memcpy(cell->ech, ch, nch);
+        memcpy(cell->ech, ch, sizeof(ch) * nch);
         cell->ech[nch] = '\0';
         cell->nech = nch;
     }
