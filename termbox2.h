@@ -1695,7 +1695,6 @@ int tb_hide_cursor(void) {
 }
 
 int tb_set_cell(int x, int y, uint32_t ch, uintattr_t fg, uintattr_t bg) {
-    if_not_init_return();
     return tb_set_cell_ex(x, y, &ch, 1, fg, bg);
 }
 
