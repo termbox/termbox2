@@ -1,12 +1,17 @@
 # termbox2
 
-termbox2 is a terminal rendering library that retains the [suckless][0] spirit
-of the original [termbox][1] (simple API, no dependencies beyond libc) and adds
-some improvements (strict error checking, more efficient escape sequence
-parsing, code gen for built-in escape sequences, opt-in support for 32-bit
-color, extended grapheme clusters, test suite). termbox2 is organized as a
-single file header library, though it is possible to compile it as a
-stand-alone shared or static library.
+termbox2 is a terminal rendering library for creating TUIs. It is a
+[suckless](https://suckless.org) alternative to the ubiquitous
+[ncurses](https://invisible-island.net/ncurses/) library. It ships with built-in
+support for popular terminals and can also fallback to terminfo if present.
+Compared to the [original termbox](https://github.com/termbox/termbox), it
+retains a simple API and no dependencies beyond libc, and adds stricter error
+checking, more efficient escape sequence parsing, opt-in support for 32-bit
+color, extended grapheme clusters, code gen for built-in escape sequences, a
+test suite, and more.
+
+termbox2 is organized as a single file header library, though it is possible to
+compile it as a stand-alone shared or static library.
 
 ![keyboard demo](demo/keyboard.gif)
 
@@ -43,8 +48,8 @@ int main(int argc, char **argv) {
 
 ### API
 
-The basic API should be pretty self-explanatory. Consult the header file itself
-for the complete API and documentation.
+The basic API is pretty self-explanatory. Consult the header file itself for the
+complete API and documentation.
 
 ```c
 int tb_init();
@@ -77,12 +82,16 @@ As mentioned above, there are two options:
    be sure to `#define TB_IMPL` in exactly one of your source files. (This is a
    common pattern for single file header libraries.)
 2. Build termbox2 as a library (either `make libtermbox2.so` or
-   `make libtermbox2.a`) and link as normal.
+   `make libtermbox2.a`) and link as normal. Make sure the compile-time options
+   remain the same for libtermbox2 and your application. (Alternatively, build
+   with `make lib` and use `termbox2.h.lib` instead of `termbox2.h`. This will
+   guarantee that the same `TB_LIB_OPTS`-gated compile-time options are used in
+   the library and the header file.)
 
 ### Language bindings
 
-Basic FFI examples in the languages below are in the `demo/` directory. (Feel
-free to submit PRs for other languages.)
+Basic FFI or ABI-compatible examples in the languages below are in the `demo/`
+directory. (Feel free to submit PRs for other languages.)
 
 * D
 * Go
@@ -99,25 +108,15 @@ Other wrapper libraries:
 * [termbox2.cr (Crystal)](https://github.com/homonoidian/termbox2.cr)
 * [Termbox.pm (Perl)](https://github.com/sanko/Termbox.pm)
 * [termbox2-hs (Haskell)](https://github.com/gatlin/termbox2-hs)
+* [termbox2-zig (Zig)](https://sr.ht/~kolunmi/termbox2-zig)
 
 ### Examples
 
-* [mle][2] - flexible terminal-based text editor
-* [ictree][3] - like tree but interactive
-* [lavat][4] - lava lamp for the terminal
-* [termbox-tetris][5] - Tetris clone
-* [dvd-screensaver][6] - a terminal screensaver
-* [matrix-tui][7] - Matrix client
-* [Vgmi][8] - Gemini client
-* [poe][9] - `.po` file editor
-
-[0]: https://suckless.org
-[1]: https://github.com/termbox/termbox
-[2]: https://github.com/adsr/mle
-[3]: https://github.com/NikitaIvanovV/ictree
-[4]: https://github.com/AngelJumbo/lavat
-[5]: https://github.com/zacharygraber/termbox-tetris
-[6]: https://github.com/yamin-shihab/dvd-screensaver
-[7]: https://github.com/git-bruh/matrix-tui
-[8]: https://github.com/RealMelkor/Vgmi
-[9]: https://sr.ht/~strahinja/poe/
+* [mle](https://github.com/adsr/mle) - flexible terminal-based text editor
+* [ictree](https://github.com/NikitaIvanovV/ictree) - like tree but interactive
+* [lavat](https://github.com/AngelJumbo/lavat) - lava lamp for the terminal
+* [termbox-tetris](https://github.com/zacharygraber/termbox-tetris) - Tetris clone
+* [dvd-screensaver](https://github.com/yamin-shihab/dvd-screensaver) - a terminal screensaver
+* [matrix-tui](https://github.com/git-bruh/matrix-tui) - Matrix client
+* [Vgmi](https://github.com/RealMelkor/Vgmi) - Gemini client
+* [poe](https://sr.ht/~strahinja/poe/) - `.po` file editor
