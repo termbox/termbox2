@@ -509,7 +509,7 @@ void draw_keyboard()
     draw_key(K_K_0, TB_WHITE, TB_BLUE);
     draw_key(K_K_PERIOD, TB_WHITE, TB_BLUE);
 
-    printf_tb(33, 1, TB_MAGENTA | TB_BOLD, TB_DEFAULT, "Keyboard demo!");
+    printf_tb(33, 1, (uint16_t)(TB_MAGENTA | TB_BOLD), TB_DEFAULT, "Keyboard demo!");
     printf_tb(21, 2, TB_MAGENTA, TB_DEFAULT, "(press CTRL+X and then CTRL+Q to exit)");
     printf_tb(15, 3, TB_MAGENTA, TB_DEFAULT, "(press CTRL+X and then CTRL+C to change input mode)");
 
