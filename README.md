@@ -109,6 +109,7 @@ Other wrapper libraries:
 * [Termbox.pm (Perl)](https://github.com/sanko/Termbox.pm)
 * [termbox2-hs (Haskell)](https://github.com/gatlin/termbox2-hs)
 * [termbox2-zig (Zig)](https://sr.ht/~kolunmi/termbox2-zig)
+* [letloop's termbox2 (Chez Scheme)](https://github.com/letloop/letloop/)
 
 ### Examples
 
