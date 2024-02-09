@@ -390,20 +390,20 @@ typedef uint16_t uintattr_t;
 #endif
 
 /* The terminal screen is represented as 2d array of cells. The structure is
- * optimized for dealing with single-width (wcwidth()==1) Unicode code points,
+ * optimized for dealing with single-width (wcwidth()==1) Unicode codepoints,
  * however some support for grapheme clusters (e.g., combining diacritical
- * marks) and wide code points (e.g., Hiragana) is provided through ech, nech,
+ * marks) and wide codepoints (e.g., Hiragana) is provided through ech, nech,
  * cech via tb_set_cell_ex(). ech is only valid when nech>0, otherwise ch is
  * used.
  *
- * For non-single-width code points, given N=wcwidth(ch)/wcswidth(ech):
+ * For non-single-width codepoints, given N=wcwidth(ch)/wcswidth(ech):
  *
  *   when N==0: termbox forces a single-width cell. Callers should avoid this
  *              if aiming to render text accurately.
  *
  *    when N>1: termbox zeroes out the following N-1 cells and skips sending
  *              them to the tty. So, e.g., if the caller sets x=0,y=0 to an N==2
- *              code point, the caller's next set should be at x=2,y=0. Anything
+ *              codepoint, the caller's next set should be at x=2,y=0. Anything
  *              set at x=1,y=0 will be ignored. If there are not enough columns
  *              remaining on the line to render N width, spaces are sent
  *              instead.
@@ -411,11 +411,11 @@ typedef uint16_t uintattr_t;
  * See tb_present() for implementation.
  */
 struct tb_cell {
-    uint32_t ch;   /* a Unicode code point */
+    uint32_t ch;   /* a Unicode codepoint */
     uintattr_t fg; /* bitwise foreground attributes */
     uintattr_t bg; /* bitwise background attributes */
 #ifdef TB_OPT_EGC
-    uint32_t *ech; /* a grapheme cluster of Unicode code points, 0-terminated */
+    uint32_t *ech; /* a grapheme cluster of Unicode codepoints, 0-terminated */
     size_t nech;   /* num elements in ech, 0 means use ch instead of ech */
     size_t cech;   /* num elements allocated for ech */
 #endif
@@ -438,7 +438,7 @@ struct tb_event {
     uint8_t type; /* one of TB_EVENT_* constants */
     uint8_t mod;  /* bitwise TB_MOD_* constants */
     uint16_t key; /* one of TB_KEY_* constants */
-    uint32_t ch;  /* a Unicode code point */
+    uint32_t ch;  /* a Unicode codepoint */
     int32_t w;    /* resize width */
     int32_t h;    /* resize height */
     int32_t x;    /* mouse x */
@@ -491,7 +491,7 @@ int tb_hide_cursor(void);
  * Function tb_set_cell(x, y, ch, fg, bg) is equivalent to
  * tb_set_cell_ex(x, y, &ch, 1, fg, bg).
  *
- * Function tb_extend_cell() is a shortcut for appending 1 code point to
+ * Function tb_extend_cell() is a shortcut for appending 1 codepoint to
  * cell->ech.
  */
 int tb_set_cell(int x, int y, uint32_t ch, uintattr_t fg, uintattr_t bg);
@@ -659,21 +659,28 @@ int tb_sendf(const char *fmt, ...);
  */
 int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *));
 
-/* Utility functions. */
+/* Return byte length of codepoint given first byte of UTF-8 sequence (1-6). */
 int tb_utf8_char_length(char c);
 
-/* Convert UTF-8 null-terminated byte sequence to UTF-32 code point.
+/* Convert UTF-8 null-terminated byte sequence to UTF-32 codepoint.
  *
  * If `c` is an empty C string, return 0. `out` is left unchanged.
  *
- * If a null byte is encountered in the middle of the code point, return a
+ * If a null byte is encountered in the middle of the codepoint, return a
  * negative number indicating how many bytes were processed. `out` is left
  * unchanged.
  *
- * Otherwise, return byte length of code point (1-6).
+ * Otherwise, return byte length of codepoint (1-6).
  */
 int tb_utf8_char_to_unicode(uint32_t *out, const char *c);
+
+/* Convert UTF-32 codepoint to UTF-8 null-terminated byte sequence.
+ *
+ * `out` must be char[7] or greater. Return byte length of codepoint (1-6).
+ */
 int tb_utf8_unicode_to_char(char *out, uint32_t c);
+
+/* Library utility functions */
 int tb_last_errno(void);
 const char *tb_strerror(int err);
 struct tb_cell *tb_cell_buffer(void);
@@ -3179,7 +3186,7 @@ static int send_char(int x, int y, uint32_t ch) {
 
 static int send_cluster(int x, int y, uint32_t *ch, size_t nch) {
     int rv;
-    char abuf[8];
+    char chu8[8];
 
     if (global.last_x != x - 1 || global.last_y != y) {
         if_err_return(rv, send_cursor_if(x, y));
@@ -3189,12 +3196,15 @@ static int send_cluster(int x, int y, uint32_t *ch, size_t nch) {
 
     int i;
     for (i = 0; i < (int)nch; i++) {
-        uint32_t ach = *(ch + i);
-        int aw = tb_utf8_unicode_to_char(abuf, ach);
-        if (!ach) {
-            abuf[0] = ' ';
+        uint32_t ch32 = *(ch + i);
+        int chu8_len;
+        if (ch32 == 0) { // replace null with space (from termbox 19dbee5)
+            chu8_len = 1;
+            chu8[0] = ' ';
+        } else {
+            chu8_len = tb_utf8_unicode_to_char(chu8, ch32);
         }
-        if_err_return(rv, bytebuf_nputs(&global.out, abuf, (size_t)aw));
+        if_err_return(rv, bytebuf_nputs(&global.out, chu8, (size_t)chu8_len));
     }
 
     return TB_OK;
