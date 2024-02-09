@@ -369,7 +369,7 @@ void draw_key(struct key *k, uint16_t fg, uint16_t bg)
     }
 }
 
-void draw_keyboard()
+void draw_keyboard(void)
 {
     int i;
     tb_set_cell(0, 0, 0x250C, TB_WHITE, TB_DEFAULT);
