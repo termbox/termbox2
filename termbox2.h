@@ -2,7 +2,7 @@
 MIT License
 
 Copyright (c) 2010-2020 nsf <no.smile.face@gmail.com>
-              2015-2023 Adam Saponara <as@php.net>
+              2015-2024 Adam Saponara <as@php.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
