@@ -1957,6 +1957,7 @@ int tb_utf8_unicode_to_char(char *out, uint32_t c) {
         c >>= 6;
     }
     out[0] = c | first;
+    out[len] = '\0';
 
     return len;
 }
