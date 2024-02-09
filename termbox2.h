@@ -632,7 +632,8 @@ int tb_poll_event(struct tb_event *event);
 int tb_get_fds(int *ttyfd, int *resizefd);
 
 /* Print and printf functions. Specify param out_w to determine width of printed
- * string.
+ * string. Incomplete trailing UTF-8 byte sequences are replaced with U+FFFD.
+ * For finer control, use tb_set_cell().
  */
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str);
 int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...);
@@ -660,6 +661,17 @@ int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *));
 
 /* Utility functions. */
 int tb_utf8_char_length(char c);
+
+/* Convert UTF-8 null-terminated byte sequence to UTF-32 code point.
+ *
+ * If `c` is an empty C string, return 0. `out` is left unchanged.
+ *
+ * If a null byte is encountered in the middle of the code point, return a
+ * negative number indicating how many bytes were processed. `out` is left
+ * unchanged.
+ *
+ * Otherwise, return byte length of code point (1-6).
+ */
 int tb_utf8_char_to_unicode(uint32_t *out, const char *c);
 int tb_utf8_unicode_to_char(char *out, uint32_t c);
 int tb_last_errno(void);
@@ -1815,11 +1827,17 @@ int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
         *out_w = 0;
     }
     while (*str) {
-        str += tb_utf8_char_to_unicode(&uni, str);
-        w = wcwidth((wchar_t)uni);
-        if (w < 0) {
-            w = 1;
+        rv = tb_utf8_char_to_unicode(&uni, str);
+        if (rv < 0) {
+            uni = 0xfffd; // replace invalid UTF-8 char with U+FFFD
+            str += rv * -1;
+        } else if (rv > 0) {
+            str += rv;
+        } else {
+            break; // shouldn't get here
         }
+        w = wcwidth((wchar_t)uni);
+        if (w < 0) w = 1;
         if (w == 0 && x > ix) {
             if_err_return(rv, tb_extend_cell(x - 1, y, uni));
         } else {
@@ -1892,18 +1910,18 @@ int tb_utf8_char_length(char c) {
 }
 
 int tb_utf8_char_to_unicode(uint32_t *out, const char *c) {
-    if (*c == 0) {
-        return TB_ERR;
-    }
+    if (*c == '\0') return 0;
 
     int i;
     unsigned char len = tb_utf8_char_length(*c);
     unsigned char mask = utf8_mask[len - 1];
     uint32_t result = c[0] & mask;
-    for (i = 1; i < len; ++i) {
+    for (i = 1; i < len && c[i] != '\0'; ++i) {
         result <<= 6;
         result |= c[i] & 0x3f;
     }
+
+    if (i != len) return i * -1;
 
     *out = result;
     return (int)len;
