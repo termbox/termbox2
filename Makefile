@@ -15,6 +15,8 @@ termbox_so_x_y_z:=$(termbox_so_x).$(termbox_so_version_minor_patch)
 termbox_ld_soname:=soname
 termbox_a:=libtermbox2.a
 
+DOCKER?=docker
+
 ifeq ($(shell $(CC) -dumpmachine | grep -q apple && echo 1), 1)
     termbox_so:=libtermbox2.dylib
     termbox_so_x:=libtermbox2.$(termbox_so_version_abi).dylib
@@ -59,7 +61,7 @@ format:
 	clang-format -i termbox2.h
 
 test: $(termbox_so) $(termbox_ffi_h) $(termbox_ffi_macro)
-	docker build -f tests/Dockerfile --build-arg=cflags="$(termbox_cflags)" .
+	$(DOCKER) build -f tests/Dockerfile --build-arg=cflags="$(termbox_cflags)" .
 
 test_local: $(termbox_so) $(termbox_ffi_h) $(termbox_ffi_macro)
 	./tests/run.sh
