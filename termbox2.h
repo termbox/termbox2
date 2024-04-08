@@ -43,6 +43,8 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
+#ifndef _WIN32
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -50,12 +52,9 @@ SOFTWARE.
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
-#include <wchar.h>
-
-#ifdef PATH_MAX
-#define TB_PATH_MAX PATH_MAX
-#else
-#define TB_PATH_MAX 4096
+#else /* _WIN32 */
+#include <synchapi.h>
+#include <windows.h>
 #endif
 
 #ifdef __cplusplus
@@ -110,6 +109,60 @@ extern "C" {
 #else
 #define TB_OPT_ATTR_W 16
 #endif
+#endif
+
+#ifdef PATH_MAX
+#define TB_PATH_MAX PATH_MAX
+#else
+#define TB_PATH_MAX 4096
+#endif
+
+#ifndef TB_RESIZE_FALLBACK_MS
+#define TB_RESIZE_FALLBACK_MS 1000
+#endif
+
+#ifndef _WIN32
+#define tb_fd                    int
+#define tb_fd_null               -1
+#define tb_termios               struct termios
+#define tb_init_file_inner       tb_compat_posix_init_file
+#define tb_init_termios          tb_compat_posix_init_termios
+#define init_term_attrs          tb_compat_posix_init_term_attrs
+#define tb_wcwidth               wcwidth
+#define tb_wcswidth              wcswidth
+#define tb_get_fds_inner         tb_compat_posix_get_fds
+#define tb_strerror_r            strerror_r
+#define init_resize_handler      tb_compat_posix_init_resize_handler
+#define update_term_size         tb_compat_posix_update_term_size
+#define update_term_size_via_esc tb_compat_posix_update_term_size_via_esc
+#define tb_deinit_termios        tb_compat_posix_deinit_termios
+#define load_terminfo            tb_compat_posix_load_terminfo
+#define tb_get_term_env          tb_compat_posix_get_term_env
+#define wait_event               tb_compat_posix_wait_event
+#define tb_bytebuf_write         tb_compat_posix_bytebuf_write
+#else /* _WIN32 */
+struct termios_win {
+    DWORD r;
+    DWORD w;
+};
+#define tb_fd                    HANDLE
+#define tb_fd_null               NULL
+#define tb_termios               struct termios_win
+#define tb_init_file_inner       tb_compat_win32_init_file
+#define tb_init_termios          tb_compat_win32_init_termios
+#define init_term_attrs          tb_compat_win32_init_term_attrs
+#define tb_wcwidth               tb_compat_win32_wcwidth
+#define tb_wcswidth              tb_compat_win32_wcswidth
+#define tb_get_fds_inner         tb_compat_win32_get_fds
+#define tb_strerror_r            tb_compat_win32_strerror_r
+#define init_resize_handler      tb_compat_win32_init_resize_handler
+#define update_term_size         tb_compat_win32_update_term_size
+#define update_term_size_via_esc tb_compat_win32_update_term_size_via_esc
+#define tb_deinit_termios        tb_compat_win32_deinit_termios
+#define load_terminfo            tb_compat_win32_load_terminfo
+#define tb_get_term_env          tb_compat_win32_get_term_env
+#define wait_event               tb_compat_win32_wait_event
+#define tb_bytebuf_write         tb_compat_win32_bytebuf_write
 #endif
 
 /* ASCII key constants (tb_event.key) */
@@ -263,7 +316,7 @@ extern "C" {
 #define TB_BRIGHT    0x4000
 #define TB_DIM       0x8000
 #define TB_256_BLACK TB_HI_BLACK // TB_256_BLACK is deprecated
-#else // 32 or 64
+#else                            // 32 or 64
 #define TB_BOLD                0x01000000
 #define TB_UNDERLINE           0x02000000
 #define TB_REVERSE             0x04000000
@@ -272,7 +325,7 @@ extern "C" {
 #define TB_HI_BLACK            0x20000000
 #define TB_BRIGHT              0x40000000
 #define TB_DIM                 0x80000000
-#define TB_TRUECOLOR_BOLD      TB_BOLD      // TB_TRUECOLOR_* is deprecated
+#define TB_TRUECOLOR_BOLD      TB_BOLD // TB_TRUECOLOR_* is deprecated
 #define TB_TRUECOLOR_UNDERLINE TB_UNDERLINE
 #define TB_TRUECOLOR_REVERSE   TB_REVERSE
 #define TB_TRUECOLOR_ITALIC    TB_ITALIC
@@ -343,6 +396,11 @@ extern "C" {
 #define TB_ERR_RESIZE_READ      -20
 #define TB_ERR_RESIZE_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
+#define TB_ERR_WIN_UNSUPPORTED  -1000
+#define TB_ERR_WIN_NO_STDIO     -1001
+#define TB_ERR_WIN_SET_CONMODE  -1002
+#define TB_ERR_WIN_GET_CONMODE  -1003
+#define TB_ERR_WIN_RESIZE       -1004
 
 #define TB_ERR_SELECT           TB_ERR_POLL
 #define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
@@ -745,10 +803,12 @@ struct cap_trie_t {
 
 struct tb_global_t {
     int ttyfd;
-    int rfd;
-    int wfd;
+    tb_fd rfd;
+    tb_fd wfd;
     int ttyfd_open;
     int resize_pipefd[2];
+    tb_termios orig_tios;
+    int has_orig_tios;
     int width;
     int height;
     int cursor_x;
@@ -769,8 +829,6 @@ struct tb_global_t {
     struct bytebuf_t out;
     struct cellbuf_t back;
     struct cellbuf_t front;
-    struct termios orig_tios;
-    int has_orig_tios;
     int last_errno;
     int initialized;
     int (*fn_extract_esc_pre)(struct tb_event *, size_t *);
@@ -1481,36 +1539,26 @@ static const unsigned char utf8_mask[6] = {0x7f, 0x1f, 0x0f, 0x07, 0x03, 0x01};
 static int tb_reset(void);
 static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
     size_t *out_w, const char *fmt, va_list vl);
-static int init_term_attrs(void);
 static int init_term_caps(void);
 static int init_cap_trie(void);
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod);
 static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
     size_t *depth);
 static int cap_trie_deinit(struct cap_trie_t *node);
-static int init_resize_handler(void);
 static int send_init_escape_codes(void);
 static int send_clear(void);
-static int update_term_size(void);
-static int update_term_size_via_esc(void);
 static int init_cellbuf(void);
 static int tb_deinit(void);
-static int load_terminfo(void);
-static int load_terminfo_from_path(const char *path, const char *term);
-static int read_terminfo_path(const char *path);
-static int parse_terminfo_caps(void);
 static int load_builtin_caps(void);
 static const char *get_terminfo_string(int16_t str_offsets_pos,
     int16_t str_offsets_len, int16_t str_table_pos, int16_t str_table_len,
     int16_t str_index);
-static int wait_event(struct tb_event *event, int timeout);
 static int extract_event(struct tb_event *event);
 static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
 static int extract_esc_cap(struct tb_event *event);
 static int extract_esc_mouse(struct tb_event *event);
 static int resize_cellbufs(void);
-static void handle_resize(int sig);
 static int send_attr(uintattr_t fg, uintattr_t bg);
 static int send_sgr(uint32_t fg, uint32_t bg, int fg_is_default,
     int bg_is_default);
@@ -1532,9 +1580,43 @@ static int cellbuf_resize(struct cellbuf_t *c, int w, int h);
 static int bytebuf_puts(struct bytebuf_t *b, const char *str);
 static int bytebuf_nputs(struct bytebuf_t *b, const char *str, size_t nstr);
 static int bytebuf_shift(struct bytebuf_t *b, size_t n);
-static int bytebuf_flush(struct bytebuf_t *b, int fd);
+static int bytebuf_flush(struct bytebuf_t *b, tb_fd fd);
 static int bytebuf_reserve(struct bytebuf_t *b, size_t sz);
 static int bytebuf_free(struct bytebuf_t *b);
+#ifndef _WIN32
+static int tb_compat_posix_init_file(const char *path);
+static int tb_compat_posix_init_termios(int rfd, int wfd);
+static int tb_compat_posix_get_fds(int *ttyfd, int *resizefd);
+static int tb_compat_posix_init_term_attrs(void);
+static void handle_resize(int sig);
+static int tb_compat_posix_init_resize_handler(void);
+static int tb_compat_posix_update_term_size(void);
+static int tb_compat_posix_update_term_size_via_esc(void);
+static int tb_compat_posix_deinit_termios(void);
+static int tb_compat_posix_load_terminfo(void);
+static int load_terminfo_from_path(const char *path, const char *term);
+static int read_terminfo_path(const char *path);
+static int parse_terminfo_caps(void);
+static const char *tb_compat_posix_get_term_env(void);
+static int tb_compat_posix_wait_event(struct tb_event *event, int timeout);
+static int tb_compat_posix_bytebuf_write(struct bytebuf_t *b, tb_fd fd);
+#else /* _WIN32 */
+static int tb_compat_win32_init_file(const char *path);
+static int tb_compat_win32_init_termios(int rfd, int wfd);
+static int tb_compat_win32_wcwidth(wchar_t c);
+static int tb_compat_win32_wcswidth(const wchar_t *s, size_t n);
+static int tb_compat_win32_get_fds(int *ttyfd, int *resizefd);
+static int tb_compat_win32_strerror_r(int errnum, char *buf, size_t buflen);
+static int tb_compat_win32_init_term_attrs(void);
+static int tb_compat_win32_init_resize_handler(void);
+static int tb_compat_win32_update_term_size(void);
+static int tb_compat_win32_update_term_size_via_esc(void);
+static int tb_compat_win32_deinit_termios(void);
+static int tb_compat_win32_load_terminfo(void);
+static const char *tb_compat_win32_get_term_env(void);
+static int tb_compat_win32_wait_event(struct tb_event *event, int timeout);
+static int tb_compat_win32_bytebuf_write(struct bytebuf_t *b, tb_fd fd);
+#endif
 
 int tb_init(void) {
     return tb_init_file("/dev/tty");
@@ -1544,13 +1626,7 @@ int tb_init_file(const char *path) {
     if (global.initialized) {
         return TB_ERR_INIT_ALREADY;
     }
-    int ttyfd = open(path, O_RDWR);
-    if (ttyfd < 0) {
-        global.last_errno = errno;
-        return TB_ERR_INIT_OPEN;
-    }
-    global.ttyfd_open = 1;
-    return tb_init_fd(ttyfd);
+    return tb_init_file_inner(path);
 }
 
 int tb_init_fd(int ttyfd) {
@@ -1561,9 +1637,8 @@ int tb_init_rwfd(int rfd, int wfd) {
     int rv;
 
     tb_reset();
-    global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
-    global.rfd = rfd;
-    global.wfd = wfd;
+
+    if_err_return(rv, tb_init_termios(rfd, wfd));
 
     do {
         if_err_break(rv, init_term_attrs());
@@ -1633,11 +1708,11 @@ int tb_present(void) {
             {
 #ifdef TB_OPT_EGC
                 if (back->nech > 0)
-                    w = wcswidth((wchar_t *)back->ech, back->nech);
+                    w = tb_wcswidth((wchar_t *)back->ech, back->nech);
                 else
 #endif
                     /* wcwidth() simply returns -1 on overflow of wchar_t */
-                    w = wcwidth((wchar_t)back->ch);
+                    w = tb_wcwidth((wchar_t)back->ch);
             }
             if (w < 1) {
                 w = 1;
@@ -1814,11 +1889,7 @@ int tb_poll_event(struct tb_event *event) {
 
 int tb_get_fds(int *ttyfd, int *resizefd) {
     if_not_init_return();
-
-    *ttyfd = global.rfd;
-    *resizefd = global.resize_pipefd[0];
-
-    return TB_OK;
+    return tb_get_fds_inner(ttyfd, resizefd);
 }
 
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
@@ -1843,7 +1914,7 @@ int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
         } else {
             break; // shouldn't get here
         }
-        w = wcwidth((wchar_t)uni);
+        w = tb_wcwidth((wchar_t)uni);
         if (w < 0) w = 1;
         if (w == 0 && x > ix) {
             if_err_return(rv, tb_extend_cell(x - 1, y, uni));
@@ -1998,6 +2069,16 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_SSCANF:
             return "Terminal width/height not received by sscanf() after "
                    "resize";
+        case TB_ERR_WIN_UNSUPPORTED:
+            return "Unsupported on Windows";
+        case TB_ERR_WIN_NO_STDIO:
+            return "Windows stdio not available";
+        case TB_ERR_WIN_SET_CONMODE:
+            return "Failed to set Windows console mode";
+        case TB_ERR_WIN_GET_CONMODE:
+            return "Failed to get Windows console mode";
+        case TB_ERR_WIN_RESIZE:
+            return "Failed to resize Windows console";
         case TB_ERR:
         case TB_ERR_INIT_OPEN:
         case TB_ERR_READ:
@@ -2011,7 +2092,8 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_POLL:
         case TB_ERR_RESIZE_READ:
         default:
-            strerror_r(global.last_errno, global.errbuf, sizeof(global.errbuf));
+            tb_strerror_r(global.last_errno, global.errbuf,
+                sizeof(global.errbuf));
             return (const char *)global.errbuf;
     }
 }
@@ -2044,8 +2126,8 @@ static int tb_reset(void) {
     int ttyfd_open = global.ttyfd_open;
     memset(&global, 0, sizeof(global));
     global.ttyfd = -1;
-    global.rfd = -1;
-    global.wfd = -1;
+    global.rfd = tb_fd_null;
+    global.wfd = tb_fd_null;
     global.ttyfd_open = ttyfd_open;
     global.resize_pipefd[0] = -1;
     global.resize_pipefd[1] = -1;
@@ -2061,32 +2143,6 @@ static int tb_reset(void) {
     global.last_bg = ~global.bg;
     global.input_mode = TB_INPUT_ESC;
     global.output_mode = TB_OUTPUT_NORMAL;
-    return TB_OK;
-}
-
-static int init_term_attrs(void) {
-    if (global.ttyfd < 0) {
-        return TB_OK;
-    }
-
-    if (tcgetattr(global.ttyfd, &global.orig_tios) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_TCGETATTR;
-    }
-
-    struct termios tios;
-    memcpy(&tios, &global.orig_tios, sizeof(tios));
-    global.has_orig_tios = 1;
-
-    cfmakeraw(&tios);
-    tios.c_cc[VMIN] = 1;
-    tios.c_cc[VTIME] = 0;
-
-    if (tcsetattr(global.ttyfd, TCSAFLUSH, &tios) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_TCSETATTR;
-    }
-
     return TB_OK;
 }
 
@@ -2225,23 +2281,6 @@ static int cap_trie_deinit(struct cap_trie_t *node) {
     return TB_OK;
 }
 
-static int init_resize_handler(void) {
-    if (pipe(global.resize_pipefd) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_PIPE;
-    }
-
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = handle_resize;
-    if (sigaction(SIGWINCH, &sa, NULL) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_SIGACTION;
-    }
-
-    return TB_OK;
-}
-
 static int send_init_escape_codes(void) {
     int rv;
     if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_ENTER_CA]));
@@ -2268,76 +2307,6 @@ static int send_clear(void) {
     return TB_OK;
 }
 
-static int update_term_size(void) {
-    int rv, ioctl_errno;
-
-    if (global.ttyfd < 0) {
-        return TB_OK;
-    }
-
-    struct winsize sz;
-    memset(&sz, 0, sizeof(sz));
-
-    // Try ioctl TIOCGWINSZ
-    if (ioctl(global.ttyfd, TIOCGWINSZ, &sz) == 0) {
-        global.width = sz.ws_col;
-        global.height = sz.ws_row;
-        return TB_OK;
-    }
-    ioctl_errno = errno;
-
-    // Try >cursor(9999,9999), >u7, <u6
-    if_ok_return(rv, update_term_size_via_esc());
-
-    global.last_errno = ioctl_errno;
-    return TB_ERR_RESIZE_IOCTL;
-}
-
-static int update_term_size_via_esc(void) {
-#ifndef TB_RESIZE_FALLBACK_MS
-#define TB_RESIZE_FALLBACK_MS 1000
-#endif
-
-    char *move_and_report = "\x1b[9999;9999H\x1b[6n";
-    ssize_t write_rv =
-        write(global.wfd, move_and_report, strlen(move_and_report));
-    if (write_rv != (ssize_t)strlen(move_and_report)) {
-        return TB_ERR_RESIZE_WRITE;
-    }
-
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(global.rfd, &fds);
-
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
-
-    int select_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
-
-    if (select_rv != 1) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_POLL;
-    }
-
-    char buf[TB_OPT_READ_BUF];
-    ssize_t read_rv = read(global.rfd, buf, sizeof(buf) - 1);
-    if (read_rv < 1) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_READ;
-    }
-    buf[read_rv] = '\0';
-
-    int rw, rh;
-    if (sscanf(buf, "\x1b[%d;%dR", &rh, &rw) != 2) {
-        return TB_ERR_RESIZE_SSCANF;
-    }
-
-    global.width = rw;
-    global.height = rh;
-    return TB_OK;
-}
-
 static int init_cellbuf(void) {
     int rv;
     if_err_return(rv, cellbuf_init(&global.back, global.width, global.height));
@@ -2357,19 +2326,8 @@ static int tb_deinit(void) {
         bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
         bytebuf_flush(&global.out, global.wfd);
     }
-    if (global.ttyfd >= 0) {
-        if (global.has_orig_tios) {
-            tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
-        }
-        if (global.ttyfd_open) {
-            close(global.ttyfd);
-            global.ttyfd_open = 0;
-        }
-    }
 
-    sigaction(SIGWINCH, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
-    if (global.resize_pipefd[0] >= 0) close(global.resize_pipefd[0]);
-    if (global.resize_pipefd[1] >= 0) close(global.resize_pipefd[1]);
+    tb_deinit_termios();
 
     cellbuf_free(&global.back);
     cellbuf_free(&global.front);
@@ -2384,113 +2342,39 @@ static int tb_deinit(void) {
     return TB_OK;
 }
 
-static int load_terminfo(void) {
-    int rv;
-    char tmp[TB_PATH_MAX];
+static int load_builtin_caps(void) {
+    int i, j;
 
-    // See terminfo(5) "Fetching Compiled Descriptions" for a description of
-    // this behavior. Some of these paths are compile-time ncurses options, so
-    // best guesses are used here.
-    const char *term = getenv("TERM");
+    const char *term = tb_get_term_env();
+
     if (!term) {
-        return TB_ERR;
+        return TB_ERR_NO_TERM;
     }
 
-    // If TERMINFO is set, try that directory and stop
-    const char *terminfo = getenv("TERMINFO");
-    if (terminfo) {
-        return load_terminfo_from_path(terminfo, term);
-    }
-
-    // Next try ~/.terminfo
-    const char *home = getenv("HOME");
-    if (home) {
-        snprintf_or_return(rv, tmp, sizeof(tmp), "%s/.terminfo", home);
-        if_ok_return(rv, load_terminfo_from_path(tmp, term));
-    }
-
-    // Next try TERMINFO_DIRS
-    //
-    // Note, empty entries are supposed to be interpretted as the "compiled-in
-    // default", which is of course system-dependent. Previously /etc/terminfo
-    // was used here. Let's skip empty entries altogether rather than give
-    // precedence to a guess, and check common paths after this loop.
-    const char *dirs = getenv("TERMINFO_DIRS");
-    if (dirs) {
-        snprintf_or_return(rv, tmp, sizeof(tmp), "%s", dirs);
-        char *dir = strtok(tmp, ":");
-        while (dir) {
-            const char *cdir = dir;
-            if (*cdir != '\0') {
-                if_ok_return(rv, load_terminfo_from_path(cdir, term));
+    // Check for exact TERM match
+    for (i = 0; builtin_terms[i].name != NULL; i++) {
+        if (strcmp(term, builtin_terms[i].name) == 0) {
+            for (j = 0; j < TB_CAP__COUNT; j++) {
+                global.caps[j] = builtin_terms[i].caps[j];
             }
-            dir = strtok(NULL, ":");
+            return TB_OK;
         }
     }
 
-#ifdef TB_TERMINFO_DIR
-    if_ok_return(rv, load_terminfo_from_path(TB_TERMINFO_DIR, term));
-#endif
-    if_ok_return(rv, load_terminfo_from_path("/usr/local/etc/terminfo", term));
-    if_ok_return(rv,
-        load_terminfo_from_path("/usr/local/share/terminfo", term));
-    if_ok_return(rv, load_terminfo_from_path("/usr/local/lib/terminfo", term));
-    if_ok_return(rv, load_terminfo_from_path("/etc/terminfo", term));
-    if_ok_return(rv, load_terminfo_from_path("/usr/share/terminfo", term));
-    if_ok_return(rv, load_terminfo_from_path("/usr/lib/terminfo", term));
-    if_ok_return(rv, load_terminfo_from_path("/usr/share/lib/terminfo", term));
-    if_ok_return(rv, load_terminfo_from_path("/lib/terminfo", term));
-
-    return TB_ERR;
-}
-
-static int load_terminfo_from_path(const char *path, const char *term) {
-    int rv;
-    char tmp[TB_PATH_MAX];
-
-    // Look for term at this terminfo location, e.g., <terminfo>/x/xterm
-    snprintf_or_return(rv, tmp, sizeof(tmp), "%s/%c/%s", path, term[0], term);
-    if_ok_return(rv, read_terminfo_path(tmp));
-
-#ifdef __APPLE__
-    // Try the Darwin equivalent path, e.g., <terminfo>/78/xterm
-    snprintf_or_return(rv, tmp, sizeof(tmp), "%s/%x/%s", path, term[0], term);
-    return read_terminfo_path(tmp);
-#endif
-
-    return TB_ERR;
-}
-
-static int read_terminfo_path(const char *path) {
-    FILE *fp = fopen(path, "rb");
-    if (!fp) {
-        return TB_ERR;
+    // Check for partial TERM or alias match
+    for (i = 0; builtin_terms[i].name != NULL; i++) {
+        if (strstr(term, builtin_terms[i].name) != NULL ||
+            (*(builtin_terms[i].alias) != '\0' &&
+                strstr(term, builtin_terms[i].alias) != NULL))
+        {
+            for (j = 0; j < TB_CAP__COUNT; j++) {
+                global.caps[j] = builtin_terms[i].caps[j];
+            }
+            return TB_OK;
+        }
     }
 
-    struct stat st;
-    if (fstat(fileno(fp), &st) != 0) {
-        fclose(fp);
-        return TB_ERR;
-    }
-
-    size_t fsize = st.st_size;
-    char *data = tb_malloc(fsize);
-    if (!data) {
-        fclose(fp);
-        return TB_ERR;
-    }
-
-    if (fread(data, 1, fsize, fp) != fsize) {
-        fclose(fp);
-        tb_free(data);
-        return TB_ERR;
-    }
-
-    global.terminfo = data;
-    global.nterminfo = fsize;
-
-    fclose(fp);
-    return TB_OK;
+    return TB_ERR_UNSUPPORTED_TERM;
 }
 
 static int parse_terminfo_caps(void) {
@@ -2545,40 +2429,6 @@ static int parse_terminfo_caps(void) {
     return TB_OK;
 }
 
-static int load_builtin_caps(void) {
-    int i, j;
-    const char *term = getenv("TERM");
-
-    if (!term) {
-        return TB_ERR_NO_TERM;
-    }
-
-    // Check for exact TERM match
-    for (i = 0; builtin_terms[i].name != NULL; i++) {
-        if (strcmp(term, builtin_terms[i].name) == 0) {
-            for (j = 0; j < TB_CAP__COUNT; j++) {
-                global.caps[j] = builtin_terms[i].caps[j];
-            }
-            return TB_OK;
-        }
-    }
-
-    // Check for partial TERM or alias match
-    for (i = 0; builtin_terms[i].name != NULL; i++) {
-        if (strstr(term, builtin_terms[i].name) != NULL ||
-            (*(builtin_terms[i].alias) != '\0' &&
-                strstr(term, builtin_terms[i].alias) != NULL))
-        {
-            for (j = 0; j < TB_CAP__COUNT; j++) {
-                global.caps[j] = builtin_terms[i].caps[j];
-            }
-            return TB_OK;
-        }
-    }
-
-    return TB_ERR_UNSUPPORTED_TERM;
-}
-
 static const char *get_terminfo_string(int16_t str_offsets_pos,
     int16_t str_offsets_len, int16_t str_table_pos, int16_t str_table_len,
     int16_t str_index) {
@@ -2608,70 +2458,6 @@ static const char *get_terminfo_string(int16_t str_offsets_pos,
     }
     return (
         const char *)(global.terminfo + (int)str_table_pos + (int)*str_offset);
-}
-
-static int wait_event(struct tb_event *event, int timeout) {
-    int rv;
-    char buf[TB_OPT_READ_BUF];
-
-    memset(event, 0, sizeof(*event));
-    if_ok_return(rv, extract_event(event));
-
-    fd_set fds;
-    struct timeval tv;
-    tv.tv_sec = timeout / 1000;
-    tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
-
-    do {
-        FD_ZERO(&fds);
-        FD_SET(global.rfd, &fds);
-        FD_SET(global.resize_pipefd[0], &fds);
-
-        int maxfd = global.resize_pipefd[0] > global.rfd
-                        ? global.resize_pipefd[0]
-                        : global.rfd;
-
-        int select_rv =
-            select(maxfd + 1, &fds, NULL, NULL, (timeout < 0) ? NULL : &tv);
-
-        if (select_rv < 0) {
-            // Let EINTR/EAGAIN bubble up
-            global.last_errno = errno;
-            return TB_ERR_POLL;
-        } else if (select_rv == 0) {
-            return TB_ERR_NO_EVENT;
-        }
-
-        int tty_has_events = (FD_ISSET(global.rfd, &fds));
-        int resize_has_events = (FD_ISSET(global.resize_pipefd[0], &fds));
-
-        if (tty_has_events) {
-            ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
-            if (read_rv < 0) {
-                global.last_errno = errno;
-                return TB_ERR_READ;
-            } else if (read_rv > 0) {
-                bytebuf_nputs(&global.in, buf, read_rv);
-            }
-        }
-
-        if (resize_has_events) {
-            int ignore = 0;
-            read(global.resize_pipefd[0], &ignore, sizeof(ignore));
-            // TODO Harden against errors encountered mid-resize
-            if_err_return(rv, update_term_size());
-            if_err_return(rv, resize_cellbufs());
-            event->type = TB_EVENT_RESIZE;
-            event->w = global.width;
-            event->h = global.height;
-            return TB_OK;
-        }
-
-        memset(event, 0, sizeof(*event));
-        if_ok_return(rv, extract_event(event));
-    } while (timeout == -1);
-
-    return rv;
 }
 
 static int extract_event(struct tb_event *event) {
@@ -2973,12 +2759,6 @@ static int resize_cellbufs(void) {
     if_err_return(rv, cellbuf_clear(&global.front));
     if_err_return(rv, send_clear());
     return TB_OK;
-}
-
-static void handle_resize(int sig) {
-    int errno_copy = errno;
-    write(global.resize_pipefd[1], &sig, sizeof(sig));
-    errno = errno_copy;
 }
 
 static int send_attr(uintattr_t fg, uintattr_t bg) {
@@ -3401,16 +3181,12 @@ static int bytebuf_shift(struct bytebuf_t *b, size_t n) {
     return TB_OK;
 }
 
-static int bytebuf_flush(struct bytebuf_t *b, int fd) {
+static int bytebuf_flush(struct bytebuf_t *b, tb_fd fd) {
+    int rv;
     if (b->len <= 0) {
         return TB_OK;
     }
-    ssize_t write_rv = write(fd, b->buf, b->len);
-    if (write_rv < 0 || (size_t)write_rv != b->len) {
-        // Note, errno will be 0 on partial write
-        global.last_errno = errno;
-        return TB_ERR;
-    }
+    if_err_return(rv, tb_bytebuf_write(b, fd));
     b->len = 0;
     return TB_OK;
 }
@@ -3444,5 +3220,507 @@ static int bytebuf_free(struct bytebuf_t *b) {
     memset(b, 0, sizeof(*b));
     return TB_OK;
 }
+
+#ifndef _WIN32 /* POSIX compat layer */
+
+static int tb_compat_posix_init_file(const char *path) {
+    int ttyfd = open(path, O_RDWR);
+    if (ttyfd < 0) {
+        global.last_errno = errno;
+        return TB_ERR_INIT_OPEN;
+    }
+    global.ttyfd_open = 1;
+    return tb_init_fd(ttyfd);
+}
+
+static int tb_compat_posix_init_termios(int rfd, int wfd) {
+    global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
+    global.rfd = rfd;
+    global.wfd = wfd;
+    return TB_OK;
+}
+
+static int tb_compat_posix_get_fds(int *ttyfd, int *resizefd) {
+    *ttyfd = global.rfd;
+    *resizefd = global.resize_pipefd[0];
+    return TB_OK;
+}
+
+static int tb_compat_posix_init_term_attrs(void) {
+    if (global.ttyfd < 0) {
+        return TB_OK;
+    }
+
+    if (tcgetattr(global.ttyfd, &global.orig_tios) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_TCGETATTR;
+    }
+
+    struct termios tios;
+    memcpy(&tios, &global.orig_tios, sizeof(tios));
+    global.has_orig_tios = 1;
+
+    cfmakeraw(&tios);
+    tios.c_cc[VMIN] = 1;
+    tios.c_cc[VTIME] = 0;
+
+    if (tcsetattr(global.ttyfd, TCSAFLUSH, &tios) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_TCSETATTR;
+    }
+
+    return TB_OK;
+}
+
+static void handle_resize(int sig) {
+    int errno_copy = errno;
+    write(global.resize_pipefd[1], &sig, sizeof(sig));
+    errno = errno_copy;
+}
+
+static int tb_compat_posix_init_resize_handler(void) {
+    if (pipe(global.resize_pipefd) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_PIPE;
+    }
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = handle_resize;
+    if (sigaction(SIGWINCH, &sa, NULL) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_SIGACTION;
+    }
+    return TB_OK;
+}
+
+static int tb_compat_posix_update_term_size(void) {
+    int rv, ioctl_errno;
+
+    if (global.ttyfd < 0) {
+        return TB_OK;
+    }
+
+    struct winsize sz;
+    memset(&sz, 0, sizeof(sz));
+
+    // Try ioctl TIOCGWINSZ
+    if (ioctl(global.ttyfd, TIOCGWINSZ, &sz) == 0) {
+        global.width = sz.ws_col;
+        global.height = sz.ws_row;
+        return TB_OK;
+    }
+    ioctl_errno = errno;
+
+    // Try >cursor(9999,9999), >u7, <u6
+    if_ok_return(rv, update_term_size_via_esc());
+
+    global.last_errno = ioctl_errno;
+    return TB_ERR_RESIZE_IOCTL;
+}
+
+static int tb_compat_posix_update_term_size_via_esc(void) {
+    char *move_and_report = "\x1b[9999;9999H\x1b[6n";
+    ssize_t write_rv =
+        write(global.wfd, move_and_report, strlen(move_and_report));
+    if (write_rv != (ssize_t)strlen(move_and_report)) {
+        return TB_ERR_RESIZE_WRITE;
+    }
+
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(global.rfd, &fds);
+
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
+
+    int select_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
+
+    if (select_rv != 1) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_POLL;
+    }
+
+    char buf[TB_OPT_READ_BUF];
+    ssize_t read_rv = read(global.rfd, buf, sizeof(buf) - 1);
+    if (read_rv < 1) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_READ;
+    }
+    buf[read_rv] = '\0';
+
+    int rw, rh;
+    if (sscanf(buf, "\x1b[%d;%dR", &rh, &rw) != 2) {
+        return TB_ERR_RESIZE_SSCANF;
+    }
+
+    global.width = rw;
+    global.height = rh;
+    return TB_OK;
+}
+
+static int tb_compat_posix_deinit_termios(void) {
+    if (global.ttyfd >= 0) {
+        if (global.has_orig_tios) {
+            tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
+        }
+        if (global.ttyfd_open) {
+            close(global.ttyfd);
+            global.ttyfd_open = 0;
+        }
+    }
+
+    sigaction(SIGWINCH, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
+    if (global.resize_pipefd[0] >= 0) close(global.resize_pipefd[0]);
+    if (global.resize_pipefd[1] >= 0) close(global.resize_pipefd[1]);
+    return TB_OK;
+}
+
+static int tb_compat_posix_load_terminfo(void) {
+    int rv;
+    char tmp[TB_PATH_MAX];
+
+    // See terminfo(5) "Fetching Compiled Descriptions" for a description of
+    // this behavior. Some of these paths are compile-time ncurses options, so
+    // best guesses are used here.
+    const char *term = tb_get_term_env();
+    if (!term) {
+        return TB_ERR;
+    }
+
+    // If TERMINFO is set, try that directory and stop
+    const char *terminfo = getenv("TERMINFO");
+    if (terminfo) {
+        return load_terminfo_from_path(terminfo, term);
+    }
+
+    // Next try ~/.terminfo
+    const char *home = getenv("HOME");
+    if (home) {
+        snprintf_or_return(rv, tmp, sizeof(tmp), "%s/.terminfo", home);
+        if_ok_return(rv, load_terminfo_from_path(tmp, term));
+    }
+
+    // Next try TERMINFO_DIRS
+    //
+    // Note, empty entries are supposed to be interpretted as the "compiled-in
+    // default", which is of course system-dependent. Previously /etc/terminfo
+    // was used here. Let's skip empty entries altogether rather than give
+    // precedence to a guess, and check common paths after this loop.
+    const char *dirs = getenv("TERMINFO_DIRS");
+    if (dirs) {
+        snprintf_or_return(rv, tmp, sizeof(tmp), "%s", dirs);
+        char *dir = strtok(tmp, ":");
+        while (dir) {
+            const char *cdir = dir;
+            if (*cdir != '\0') {
+                if_ok_return(rv, load_terminfo_from_path(cdir, term));
+            }
+            dir = strtok(NULL, ":");
+        }
+    }
+
+#ifdef TB_TERMINFO_DIR
+    if_ok_return(rv, load_terminfo_from_path(TB_TERMINFO_DIR, term));
+#endif
+    if_ok_return(rv, load_terminfo_from_path("/usr/local/etc/terminfo", term));
+    if_ok_return(rv,
+        load_terminfo_from_path("/usr/local/share/terminfo", term));
+    if_ok_return(rv, load_terminfo_from_path("/usr/local/lib/terminfo", term));
+    if_ok_return(rv, load_terminfo_from_path("/etc/terminfo", term));
+    if_ok_return(rv, load_terminfo_from_path("/usr/share/terminfo", term));
+    if_ok_return(rv, load_terminfo_from_path("/usr/lib/terminfo", term));
+    if_ok_return(rv, load_terminfo_from_path("/usr/share/lib/terminfo", term));
+    if_ok_return(rv, load_terminfo_from_path("/lib/terminfo", term));
+
+    return TB_ERR;
+}
+
+static int load_terminfo_from_path(const char *path, const char *term) {
+    int rv;
+    char tmp[TB_PATH_MAX];
+
+    // Look for term at this terminfo location, e.g., <terminfo>/x/xterm
+    snprintf_or_return(rv, tmp, sizeof(tmp), "%s/%c/%s", path, term[0], term);
+    if_ok_return(rv, read_terminfo_path(tmp));
+
+#ifdef __APPLE__
+    // Try the Darwin equivalent path, e.g., <terminfo>/78/xterm
+    snprintf_or_return(rv, tmp, sizeof(tmp), "%s/%x/%s", path, term[0], term);
+    return read_terminfo_path(tmp);
+#endif
+
+    return TB_ERR;
+}
+
+static int read_terminfo_path(const char *path) {
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+        return TB_ERR;
+    }
+
+    struct stat st;
+    if (fstat(fileno(fp), &st) != 0) {
+        fclose(fp);
+        return TB_ERR;
+    }
+
+    size_t fsize = st.st_size;
+    char *data = tb_malloc(fsize);
+    if (!data) {
+        fclose(fp);
+        return TB_ERR;
+    }
+
+    if (fread(data, 1, fsize, fp) != fsize) {
+        fclose(fp);
+        tb_free(data);
+        return TB_ERR;
+    }
+
+    global.terminfo = data;
+    global.nterminfo = fsize;
+
+    fclose(fp);
+    return TB_OK;
+}
+
+static const char *tb_compat_posix_get_term_env(void) {
+    return getenv("TERM");
+}
+
+static int tb_compat_posix_wait_event(struct tb_event *event, int timeout) {
+    int rv;
+    char buf[TB_OPT_READ_BUF];
+
+    memset(event, 0, sizeof(*event));
+    if_ok_return(rv, extract_event(event));
+
+    fd_set fds;
+    struct timeval tv;
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = (timeout - (tv.tv_sec * 1000)) * 1000;
+
+    do {
+        FD_ZERO(&fds);
+        FD_SET(global.rfd, &fds);
+        FD_SET(global.resize_pipefd[0], &fds);
+
+        int maxfd = global.resize_pipefd[0] > global.rfd
+                        ? global.resize_pipefd[0]
+                        : global.rfd;
+
+        int select_rv =
+            select(maxfd + 1, &fds, NULL, NULL, (timeout < 0) ? NULL : &tv);
+
+        if (select_rv < 0) {
+            // Let EINTR/EAGAIN bubble up
+            global.last_errno = errno;
+            return TB_ERR_POLL;
+        } else if (select_rv == 0) {
+            return TB_ERR_NO_EVENT;
+        }
+
+        int tty_has_events = (FD_ISSET(global.rfd, &fds));
+        int resize_has_events = (FD_ISSET(global.resize_pipefd[0], &fds));
+
+        if (tty_has_events) {
+            ssize_t read_rv = read(global.rfd, buf, sizeof(buf));
+            if (read_rv < 0) {
+                global.last_errno = errno;
+                return TB_ERR_READ;
+            } else if (read_rv > 0) {
+                bytebuf_nputs(&global.in, buf, read_rv);
+            }
+        }
+
+        if (resize_has_events) {
+            int ignore = 0;
+            read(global.resize_pipefd[0], &ignore, sizeof(ignore));
+            // TODO Harden against errors encountered mid-resize
+            if_err_return(rv, update_term_size());
+            if_err_return(rv, resize_cellbufs());
+            event->type = TB_EVENT_RESIZE;
+            event->w = global.width;
+            event->h = global.height;
+            return TB_OK;
+        }
+
+        memset(event, 0, sizeof(*event));
+        if_ok_return(rv, extract_event(event));
+    } while (timeout == -1);
+
+    return rv;
+}
+
+static int tb_compat_posix_bytebuf_write(struct bytebuf_t *b, tb_fd fd) {
+    ssize_t write_rv = write(fd, b->buf, b->len);
+    if (write_rv < 0 || (size_t)write_rv != b->len) {
+        // Note, errno will be 0 on partial write
+        global.last_errno = errno;
+        return TB_ERR;
+    }
+    return TB_OK;
+}
+
+#else /* Windows compat layer */
+
+static int tb_compat_win32_init_file(const char *path) {
+    if (strcmp(path, "/dev/tty") != 0) {
+        return TB_ERR_WIN_UNSUPPORTED;
+    }
+    return tb_init_rwfd(-1, -1);
+}
+
+static int tb_compat_win32_init_termios(int rfd, int wfd) {
+    if (rfd != -1 && wfd != -1) {
+        return TB_ERR_WIN_UNSUPPORTED;
+    }
+    global.rfd = GetStdHandle(STD_INPUT_HANDLE);
+    global.wfd = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (!global.rfd || !global.wfd || global.rfd == INVALID_HANDLE_VALUE ||
+        global.wfd == INVALID_HANDLE_VALUE)
+    {
+        return TB_ERR_WIN_NO_STDIO;
+    }
+    return TB_OK;
+}
+
+static int tb_compat_win32_wcwidth(wchar_t c) {
+    return 1; /* TODO wcwidth on Windows? */
+}
+
+static int tb_compat_win32_wcswidth(const wchar_t *s, size_t n) {
+    return 1; /* TODO wcswidth on Windows? */
+}
+
+static int tb_compat_win32_get_fds(int *ttyfd, int *resizefd) {
+    return TB_ERR_WIN_UNSUPPORTED;
+}
+
+static int tb_compat_win32_strerror_r(int errnum, char *buf, size_t buflen) {
+    int rv;
+    snprintf_or_return(rv, buf, buflen, "Unknown error %d on Windows", errnum);
+    return TB_OK;
+}
+
+static int tb_compat_win32_init_term_attrs(void) {
+    if (!SetConsoleCP(CP_UTF8) || !SetConsoleOutputCP(CP_UTF8)) {
+        return TB_ERR_WIN_SET_CONMODE;
+    } else if (!GetConsoleMode(global.rfd, &global.orig_tios.r) ||
+               !GetConsoleMode(global.wfd, &global.orig_tios.w) ||
+               !(global.has_orig_tios = 1))
+    {
+        return TB_ERR_WIN_GET_CONMODE;
+    } else if (!SetConsoleMode(global.rfd, ENABLE_WINDOW_INPUT |
+                                               ENABLE_MOUSE_INPUT |
+                                               ENABLE_VIRTUAL_TERMINAL_INPUT) ||
+               !SetConsoleMode(global.wfd,
+                   ENABLE_PROCESSED_OUTPUT |
+                       ENABLE_VIRTUAL_TERMINAL_PROCESSING |
+                       DISABLE_NEWLINE_AUTO_RETURN))
+    {
+        return TB_ERR_WIN_SET_CONMODE;
+    }
+    return TB_OK;
+}
+
+static int tb_compat_win32_init_resize_handler(void) {
+    return TB_OK;
+}
+
+static int tb_compat_win32_update_term_size(void) {
+    CONSOLE_SCREEN_BUFFER_INFO info;
+
+    if (!GetConsoleScreenBufferInfo(global.wfd, &info)) {
+        return TB_ERR_WIN_RESIZE;
+    }
+
+    global.width = info.dwSize.X;
+    global.height = info.dwSize.Y;
+
+    return TB_OK;
+}
+
+static int tb_compat_win32_update_term_size_via_esc(void) {
+    return TB_ERR;
+}
+
+static int tb_compat_win32_deinit_termios(void) {
+    if (global.has_orig_tios) {
+        SetConsoleMode(global.rfd, global.orig_tios.r);
+        SetConsoleMode(global.wfd, global.orig_tios.w);
+    }
+    return TB_OK;
+}
+
+static int tb_compat_win32_load_terminfo(void) {
+    return TB_ERR;
+}
+
+static const char *tb_compat_win32_get_term_env(void) {
+    return "xterm-256color"; // Use xterm caps on Windows
+}
+
+static int tb_compat_win32_wait_event(struct tb_event *event, int timeout) {
+    int rv;
+    INPUT_RECORD buf[TB_OPT_READ_BUF];
+
+    memset(event, 0, sizeof(*event));
+    if_ok_return(rv, extract_event(event));
+
+    do {
+        DWORD wait_rv = WaitForSingleObject(global.rfd, (DWORD)timeout);
+        if (wait_rv == WAIT_TIMEOUT) {
+            return TB_ERR_NO_EVENT;
+        } else if (wait_rv != WAIT_OBJECT_0) {
+            return TB_ERR_POLL;
+        }
+
+        DWORD nevent = 0;
+        if (!ReadConsoleInputA(global.rfd, buf, TB_OPT_READ_BUF, &nevent)) {
+            return TB_ERR_READ;
+        }
+
+        DWORD i;
+        for (i = 0; i < nevent; i++) {
+            if (buf[i].EventType == KEY_EVENT) {
+                if (buf[i].Event.KeyEvent.bKeyDown &&
+                    buf[i].Event.KeyEvent.uChar.AsciiChar != 0)
+                {
+                    bytebuf_nputs(&global.in,
+                        &(buf[i].Event.KeyEvent.uChar.AsciiChar), 1);
+                }
+            }
+        }
+
+        for (i = 0; i < nevent; i++) {
+            if (buf[i].EventType == WINDOW_BUFFER_SIZE_EVENT) {
+                if_err_return(rv, update_term_size());
+                if_err_return(rv, resize_cellbufs());
+                event->type = TB_EVENT_RESIZE;
+                event->w = global.width;
+                event->h = global.height;
+                return TB_OK;
+            }
+        }
+
+        memset(event, 0, sizeof(*event));
+        if_ok_return(rv, extract_event(event));
+    } while (timeout == -1);
+
+    return rv;
+}
+
+static int tb_compat_win32_bytebuf_write(struct bytebuf_t *b, tb_fd fd) {
+    DWORD nw;
+    if (!WriteConsoleA(fd, b->buf, (DWORD)b->len, &nw, NULL) || nw != b->len) {
+        return TB_ERR;
+    }
+    return TB_OK;
+}
+
+#endif /* Compat layer */
 
 #endif /* TB_IMPL */
