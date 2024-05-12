@@ -137,6 +137,7 @@ extern "C" {
 #define update_term_size_via_esc tb_compat_posix_update_term_size_via_esc
 #define tb_deinit_termios        tb_compat_posix_deinit_termios
 #define load_terminfo            tb_compat_posix_load_terminfo
+#define parse_terminfo_caps      tb_compat_posix_parse_terminfo_caps
 #define tb_get_term_env          tb_compat_posix_get_term_env
 #define wait_event               tb_compat_posix_wait_event
 #define tb_bytebuf_write         tb_compat_posix_bytebuf_write
@@ -157,9 +158,10 @@ struct termios_win {
 #define tb_strerror_r            tb_compat_win32_strerror_r
 #define init_resize_handler      tb_compat_win32_init_resize_handler
 #define update_term_size         tb_compat_win32_update_term_size
-#define update_term_size_via_esc tb_compat_win32_update_term_size_via_esc
+#define update_term_size_via_esc tb_compat_win32_void_err
 #define tb_deinit_termios        tb_compat_win32_deinit_termios
-#define load_terminfo            tb_compat_win32_load_terminfo
+#define load_terminfo            tb_compat_win32_void_err
+#define parse_terminfo_caps      tb_compat_win32_void_err
 #define tb_get_term_env          tb_compat_win32_get_term_env
 #define wait_event               tb_compat_win32_wait_event
 #define tb_bytebuf_write         tb_compat_win32_bytebuf_write
@@ -1594,9 +1596,9 @@ static int tb_compat_posix_update_term_size(void);
 static int tb_compat_posix_update_term_size_via_esc(void);
 static int tb_compat_posix_deinit_termios(void);
 static int tb_compat_posix_load_terminfo(void);
+static int tb_compat_posix_parse_terminfo_caps(void);
 static int load_terminfo_from_path(const char *path, const char *term);
 static int read_terminfo_path(const char *path);
-static int parse_terminfo_caps(void);
 static const char *tb_compat_posix_get_term_env(void);
 static int tb_compat_posix_wait_event(struct tb_event *event, int timeout);
 static int tb_compat_posix_bytebuf_write(struct bytebuf_t *b, tb_fd fd);
@@ -1611,6 +1613,7 @@ static int tb_compat_win32_init_term_attrs(void);
 static int tb_compat_win32_init_resize_handler(void);
 static int tb_compat_win32_update_term_size(void);
 static int tb_compat_win32_update_term_size_via_esc(void);
+static int tb_compat_win32_void_err(void);
 static int tb_compat_win32_deinit_termios(void);
 static int tb_compat_win32_load_terminfo(void);
 static const char *tb_compat_win32_get_term_env(void);
@@ -2375,58 +2378,6 @@ static int load_builtin_caps(void) {
     }
 
     return TB_ERR_UNSUPPORTED_TERM;
-}
-
-static int parse_terminfo_caps(void) {
-    // See term(5) "LEGACY STORAGE FORMAT" and "EXTENDED STORAGE FORMAT" for a
-    // description of this behavior.
-
-    // Ensure there's at least a header's worth of data
-    if (global.nterminfo < 6) {
-        return TB_ERR;
-    }
-
-    int16_t *header = (int16_t *)global.terminfo;
-    // header[0] the magic number (octal 0432 or 01036)
-    // header[1] the size, in bytes, of the names section
-    // header[2] the number of bytes in the boolean section
-    // header[3] the number of short integers in the numbers section
-    // header[4] the number of offsets (short integers) in the strings section
-    // header[5] the size, in bytes, of the string table
-
-    // Legacy ints are 16-bit, extended ints are 32-bit
-    const int bytes_per_int = header[0] == 01036 ? 4  // 32-bit
-                                                 : 2; // 16-bit
-
-    // > Between the boolean section and the number section, a null byte will be
-    // > inserted, if necessary, to ensure that the number section begins on an
-    // > even byte
-    const int align_offset = (header[1] + header[2]) % 2 != 0 ? 1 : 0;
-
-    const int pos_str_offsets =
-        (6 * sizeof(int16_t)) // header (12 bytes)
-        + header[1]           // length of names section
-        + header[2]           // length of boolean section
-        + align_offset +
-        (header[3] * bytes_per_int); // length of numbers section
-
-    const int pos_str_table =
-        pos_str_offsets +
-        (header[4] * sizeof(int16_t)); // length of string offsets table
-
-    // Load caps
-    int i;
-    for (i = 0; i < TB_CAP__COUNT; i++) {
-        const char *cap = get_terminfo_string(pos_str_offsets, header[4],
-            pos_str_table, header[5], terminfo_cap_indexes[i]);
-        if (!cap) {
-            // Something is not right
-            return TB_ERR;
-        }
-        global.caps[i] = cap;
-    }
-
-    return TB_OK;
 }
 
 static const char *get_terminfo_string(int16_t str_offsets_pos,
@@ -3437,6 +3388,58 @@ static int tb_compat_posix_load_terminfo(void) {
     return TB_ERR;
 }
 
+static int tb_compat_posix_parse_terminfo_caps(void) {
+    // See term(5) "LEGACY STORAGE FORMAT" and "EXTENDED STORAGE FORMAT" for a
+    // description of this behavior.
+
+    // Ensure there's at least a header's worth of data
+    if (global.nterminfo < 6) {
+        return TB_ERR;
+    }
+
+    int16_t *header = (int16_t *)global.terminfo;
+    // header[0] the magic number (octal 0432 or 01036)
+    // header[1] the size, in bytes, of the names section
+    // header[2] the number of bytes in the boolean section
+    // header[3] the number of short integers in the numbers section
+    // header[4] the number of offsets (short integers) in the strings section
+    // header[5] the size, in bytes, of the string table
+
+    // Legacy ints are 16-bit, extended ints are 32-bit
+    const int bytes_per_int = header[0] == 01036 ? 4  // 32-bit
+                                                 : 2; // 16-bit
+
+    // > Between the boolean section and the number section, a null byte will be
+    // > inserted, if necessary, to ensure that the number section begins on an
+    // > even byte
+    const int align_offset = (header[1] + header[2]) % 2 != 0 ? 1 : 0;
+
+    const int pos_str_offsets =
+        (6 * sizeof(int16_t)) // header (12 bytes)
+        + header[1]           // length of names section
+        + header[2]           // length of boolean section
+        + align_offset +
+        (header[3] * bytes_per_int); // length of numbers section
+
+    const int pos_str_table =
+        pos_str_offsets +
+        (header[4] * sizeof(int16_t)); // length of string offsets table
+
+    // Load caps
+    int i;
+    for (i = 0; i < TB_CAP__COUNT; i++) {
+        const char *cap = get_terminfo_string(pos_str_offsets, header[4],
+            pos_str_table, header[5], terminfo_cap_indexes[i]);
+        if (!cap) {
+            // Something is not right
+            return TB_ERR;
+        }
+        global.caps[i] = cap;
+    }
+
+    return TB_OK;
+}
+
 static int load_terminfo_from_path(const char *path, const char *term) {
     int rv;
     char tmp[TB_PATH_MAX];
@@ -3643,7 +3646,7 @@ static int tb_compat_win32_update_term_size(void) {
     return TB_OK;
 }
 
-static int tb_compat_win32_update_term_size_via_esc(void) {
+static int tb_compat_win32_void_err(void) {
     return TB_ERR;
 }
 
@@ -3653,10 +3656,6 @@ static int tb_compat_win32_deinit_termios(void) {
         SetConsoleMode(global.wfd, global.orig_tios.w);
     }
     return TB_OK;
-}
-
-static int tb_compat_win32_load_terminfo(void) {
-    return TB_ERR;
 }
 
 static const char *tb_compat_win32_get_term_env(void) {
