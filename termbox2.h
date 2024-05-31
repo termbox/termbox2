@@ -23,8 +23,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef __TERMBOX_H
-#define __TERMBOX_H
+#ifndef TERMBOX_H_INCL
+#define TERMBOX_H_INCL
 
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE
@@ -693,7 +693,7 @@ const char *tb_version(void);
 }
 #endif
 
-#endif /* __TERMBOX_H */
+#endif /* TERMBOX_H_INCL */
 
 #ifdef TB_IMPL
 
