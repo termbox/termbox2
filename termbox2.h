@@ -2787,7 +2787,7 @@ static int extract_esc_mouse(struct tb_event *event) {
 
     enum type { TYPE_VT200 = 0, TYPE_1006, TYPE_1015, TYPE_MAX };
 
-    char *cmp[TYPE_MAX] = {//
+    const char *cmp[TYPE_MAX] = {//
         // X10 mouse encoding, the simplest one
         // \x1b [ M Cb Cx Cy
         [TYPE_VT200] = "\x1b[M",
