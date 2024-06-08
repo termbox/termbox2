@@ -45,10 +45,10 @@ $(termbox_a): $(termbox_o)
 	$(AR) rcs $@ $(termbox_o)
 
 $(termbox_ffi_h): $(termbox_h)
-	awk '/__ffi_start/{p=1} p==1 || /__TERMBOX_H/{print}' $^ | $(CC) -DTB_LIB_OPTS $(termbox_cflags) -P -E - >$@
+	awk '/__ffi_start/{p=1} p==1 || /TERMBOX_H_INCL/{print}' $^ | $(CC) -DTB_LIB_OPTS $(termbox_cflags) -P -E - >$@
 
 $(termbox_ffi_macro): $(termbox_h)
-	awk '/__ffi_start/{p=1} p==1 || /__TERMBOX_H/{print}' $^ | $(CC) -DTB_LIB_OPTS $(termbox_cflags) -P -E -dM - >$@
+	awk '/__ffi_start/{p=1} p==1 || /TERMBOX_H_INCL/{print}' $^ | $(CC) -DTB_LIB_OPTS $(termbox_cflags) -P -E -dM - >$@
 
 $(termbox_h_lib): $(termbox_h)
 	sed 's|0 // __tb_lib_opts|1 // __tb_lib_opts|' $(termbox_h) >$@
