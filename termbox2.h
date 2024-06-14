@@ -499,6 +499,21 @@ int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
     uintattr_t bg);
 int tb_extend_cell(int x, int y, uint32_t ch);
 
+/* Get cell at specified position.
+ *
+ * If position is valid, function returns TB_OK and cell contents are copied to
+ * `cell`. Note if `nech>0`, then `ech` will be a pointer to memory which may
+ * be invalid or freed after subsequent library calls. Callers must copy this
+ * memory if they need to persist it for some reason. Modifying memory at `ech`
+ * results in undefined behavior.
+ *
+ * If `back` is non-zero, return cells from the internal back buffer. Otherwise,
+ * return cells from the front buffer. Note the front buffer is updated on each
+ * call to tb_present(), whereas the back buffer is updated immediately by
+ * tb_set_cell() and other functions that mutate cell contents.
+ */
+int tb_get_cell(int x, int y, int back, struct tb_cell *cell);
+
 /* Sets the input mode. Termbox has two input modes:
  *
  * 1. TB_INPUT_ESC
@@ -1725,6 +1740,15 @@ int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
     if_err_return(rv, cellbuf_get(&global.back, x, y, &cell));
     if_err_return(rv, cell_set(cell, ch, nch, fg, bg));
     return TB_OK;
+}
+
+int tb_get_cell(int x, int y, int back, struct tb_cell *cell) {
+    if_not_init_return();
+    int rv;
+    struct tb_cell *cellp = NULL;
+    rv = cellbuf_get(back ? &global.back : &global.front, x, y, &cellp);
+    if (cellp) memcpy(cell, cellp, sizeof(*cell));
+    return rv;
 }
 
 int tb_extend_cell(int x, int y, uint32_t ch) {
