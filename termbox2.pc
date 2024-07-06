@@ -1,0 +1,10 @@
+prefix=/usr/local
+includedir=${prefix}/include
+libdir=${prefix}/lib
+
+Name: termbox2
+Version: 2.0.0
+Description: Suckless terminal rendering library
+URL: https://github.com/termbox/termbox2
+Cflags: -I${includedir}/
+Libs: -L${libdir} -ltermbox2

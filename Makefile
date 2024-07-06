@@ -78,6 +78,7 @@ install_lib:
 	$(MAKE) install_h_lib
 	$(MAKE) install_a
 	$(MAKE) install_so
+	cp termbox2.pc /usr/share/pkgconfig
 
 install_h: $(termbox_h)
 	install -d $(DESTDIR)$(prefix)/include
