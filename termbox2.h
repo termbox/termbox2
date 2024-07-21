@@ -1666,6 +1666,7 @@ int tb_present(void) {
 
                 send_attr(back->fg, back->bg);
                 if (w > 1 && x >= global.front.width - (w - 1)) {
+                    // Not enough room for wide char, send spaces
                     for (i = x; i < global.front.width; i++) {
                         send_char(i, y, ' ');
                     }
@@ -1678,12 +1679,20 @@ int tb_present(void) {
 #endif
                             send_char(x, y, back->ch);
                     }
+
+                    // When wcwidth>1, we need to advance the cursor by more
+                    // than 1, thereby skipping some cells. Set these skipped
+                    // cells to an invalid codepoint in the front buffer, so
+                    // that if this cell is later replaced by a wcwidth==1 char,
+                    // we'll get a cell_cmp diff for the skipped cells and
+                    // properly re-render.
                     for (i = 1; i < w; i++) {
                         struct tb_cell *front_wide;
+                        uint32_t invalid = -1;
                         if_err_return(rv,
                             cellbuf_get(&global.front, x + i, y, &front_wide));
                         if_err_return(rv,
-                            cell_set(front_wide, 0, 1, back->fg, back->bg));
+                            cell_set(front_wide, &invalid, 1, -1, -1));
                     }
                 }
             }
