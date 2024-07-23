@@ -2096,7 +2096,12 @@ static int init_term_attrs(void) {
     memcpy(&tios, &global.orig_tios, sizeof(tios));
     global.has_orig_tios = 1;
 
-    cfmakeraw(&tios);
+    tios.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP
+		    | INLCR | IGNCR | ICRNL | IXON);
+    tios.c_oflag &= ~OPOST;
+    tios.c_lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    tios.c_cflag &= ~(CSIZE | PARENB);
+    tios.c_cflag |= CS8;
     tios.c_cc[VMIN] = 1;
     tios.c_cc[VTIME] = 0;
 
