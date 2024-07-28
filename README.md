@@ -80,7 +80,9 @@ As mentioned above, there are two options:
 1. Copy (or `git submodule`) `termbox2.h` into your C project. As normal,
    include the header file wherever you want to use `tb_*` functions, but also
    be sure to `#define TB_IMPL` in exactly one of your source files. (This is a
-   common pattern for single file header libraries.)
+   common pattern for single file header libraries.) Ensure that feature test
+   macros `_DEFAULT_SOURCE` and `_XOPEN_SOURCE` are defined (either by defining
+   them via compiler flags or including `termbox2.h` first[^1]).
 2. Build termbox2 as a library (either `make libtermbox2.so` or
    `make libtermbox2.a`) and link as normal. Make sure the compile-time options
    remain the same for libtermbox2 and your application. (Alternatively, build
@@ -121,3 +123,5 @@ Other wrapper libraries:
 * [matrix-tui](https://github.com/git-bruh/matrix-tui) - Matrix client
 * [Vgmi](https://github.com/RealMelkor/Vgmi) - Gemini client
 * [poe](https://sr.ht/~strahinja/poe/) - `.po` file editor
+
+[^1]: See https://github.com/termbox/termbox2/pull/75#issuecomment-2252242269
