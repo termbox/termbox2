@@ -51,6 +51,7 @@ SOFTWARE.
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <wctype.h>
 
 #ifdef PATH_MAX
 #define TB_PATH_MAX PATH_MAX
@@ -632,7 +633,18 @@ int tb_poll_event(struct tb_event *event);
 int tb_get_fds(int *ttyfd, int *resizefd);
 
 /* Print and printf functions. Specify param out_w to determine width of printed
- * string. Incomplete trailing UTF-8 byte sequences are replaced with U+FFFD.
+ * string.
+ *
+ * Non-printable characters and truncated UTF-8 byte sequences are replaced with
+ * U+FFFD.
+ *
+ * Newlines (`\n`) are supported with the caveat that out_w will return the
+ * width of the string as if it were on a single line.
+ *
+ * If the starting coordinate is out of bounds, TB_ERR_OUT_OF_BOUNDS is
+ * returned. Beyond that, portions of the string that would go out of bounds are
+ * ignored.
+ *
  * For finer control, use tb_set_cell().
  */
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str);
@@ -1546,6 +1558,7 @@ static int cellbuf_init(struct cellbuf_t *c, int w, int h);
 static int cellbuf_free(struct cellbuf_t *c);
 static int cellbuf_clear(struct cellbuf_t *c);
 static int cellbuf_get(struct cellbuf_t *c, int x, int y, struct tb_cell **out);
+static int cellbuf_in_bounds(struct cellbuf_t *c, int x, int y);
 static int cellbuf_resize(struct cellbuf_t *c, int w, int h);
 static int bytebuf_puts(struct bytebuf_t *b, const char *str);
 static int bytebuf_nputs(struct bytebuf_t *b, const char *str, size_t nstr);
@@ -1854,14 +1867,21 @@ int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str) {
 
 int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
     const char *str) {
-    int rv;
+    int rv, w, ix;
     uint32_t uni;
-    int w, ix = x;
-    if (out_w) {
-        *out_w = 0;
+
+    if_not_init_return();
+
+    if (!cellbuf_in_bounds(&global.back, x, y)) {
+        return TB_ERR_OUT_OF_BOUNDS;
     }
+
+    ix = x;
+    if (out_w) *out_w = 0;
+
     while (*str) {
         rv = tb_utf8_char_to_unicode(&uni, str);
+
         if (rv < 0) {
             uni = 0xfffd; // replace invalid UTF-8 char with U+FFFD
             str += rv * -1;
@@ -1870,18 +1890,32 @@ int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
         } else {
             break; // shouldn't get here
         }
+
+        if (uni == '\n') { // TODO \r, \t, \v, \f, etc?
+            x = ix;
+            y += 1;
+            continue;
+        } else if (!iswprint((wint_t)uni)) {
+            uni = 0xfffd; // replace non-printable with U+FFFD
+        }
+
         w = wcwidth((wchar_t)uni);
-        if (w < 0) w = 1;
-        if (w == 0 && x > ix) {
-            if_err_return(rv, tb_extend_cell(x - 1, y, uni));
+        if (w < 0) {
+            return TB_ERR; // shouldn't happen if iswprint
+        } else if (w == 0) { // combining character
+            if (cellbuf_in_bounds(&global.back, x - 1, y)) {
+                if_err_return(rv, tb_extend_cell(x - 1, y, uni));
+            }
         } else {
-            if_err_return(rv, tb_set_cell(x, y, uni, fg, bg));
+            if (cellbuf_in_bounds(&global.back, x, y)) {
+                if_err_return(rv, tb_set_cell(x, y, uni, fg, bg));
+            }
         }
+
         x += w;
-        if (out_w) {
-            *out_w += w;
-        }
+        if (out_w) *out_w += w;
     }
+
     return TB_OK;
 }
 
@@ -3360,12 +3394,19 @@ static int cellbuf_clear(struct cellbuf_t *c) {
 
 static int cellbuf_get(struct cellbuf_t *c, int x, int y,
     struct tb_cell **out) {
-    if (x < 0 || x >= c->width || y < 0 || y >= c->height) {
+    if (!cellbuf_in_bounds(c, x, y)) {
         *out = NULL;
         return TB_ERR_OUT_OF_BOUNDS;
     }
     *out = &c->cells[(y * c->width) + x];
     return TB_OK;
+}
+
+static int cellbuf_in_bounds(struct cellbuf_t *c, int x, int y) {
+    if (x < 0 || x >= c->width || y < 0 || y >= c->height) {
+        return 0;
+    }
+    return 1;
 }
 
 static int cellbuf_resize(struct cellbuf_t *c, int w, int h) {
