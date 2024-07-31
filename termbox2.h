@@ -51,6 +51,7 @@ SOFTWARE.
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <wctype.h>
 
 #ifdef PATH_MAX
 #define TB_PATH_MAX PATH_MAX
@@ -493,6 +494,9 @@ int tb_hide_cursor(void);
  *
  * Function tb_extend_cell() is a shortcut for appending 1 codepoint to
  * cell->ech.
+ *
+ * Non-printable (`iswprint(3)`) codepoints are replaced with U+FFFD at render
+ * time.
  */
 int tb_set_cell(int x, int y, uint32_t ch, uintattr_t fg, uintattr_t bg);
 int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
@@ -3224,13 +3228,10 @@ static int send_cluster(int x, int y, uint32_t *ch, size_t nch) {
     int i;
     for (i = 0; i < (int)nch; i++) {
         uint32_t ch32 = *(ch + i);
-        int chu8_len;
-        if (ch32 == 0) { // replace null with space (from termbox 19dbee5)
-            chu8_len = 1;
-            chu8[0] = ' ';
-        } else {
-            chu8_len = tb_utf8_unicode_to_char(chu8, ch32);
+        if (!iswprint((wint_t)ch32)) {
+            ch32 = 0xfffd; // replace non-printable codepoints with U+FFFD
         }
+        int chu8_len = tb_utf8_unicode_to_char(chu8, ch32);
         if_err_return(rv, bytebuf_nputs(&global.out, chu8, (size_t)chu8_len));
     }
 
