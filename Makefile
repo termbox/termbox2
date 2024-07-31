@@ -100,4 +100,7 @@ install_so: $(termbox_so_x_y_z)
 clean:
 	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x) $(termbox_so_x_y_z) $(termbox_ffi_h) $(termbox_ffi_macro) $(termbox_h_lib) tests/**/observed.ansi
 
-.PHONY: all lib terminfo format test test_local install install_lib install_h install_h_lib install_a install_so clean
+win:
+	cl /TC /DTB_IMPL /DTB_LIB_OPTS demo/keyboard.c /I.
+
+.PHONY: all lib terminfo format test test_local install install_lib install_h install_h_lib install_a install_so clean win
