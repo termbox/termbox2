@@ -2482,7 +2482,7 @@ static int load_terminfo_from_path(const char *path, const char *term) {
 #ifdef __APPLE__
     // Try the Darwin equivalent path, e.g., <terminfo>/78/xterm
     snprintf_or_return(rv, tmp, sizeof(tmp), "%s/%x/%s", path, term[0], term);
-    return read_terminfo_path(tmp);
+    if_ok_return(rv, read_terminfo_path(tmp));
 #endif
 
     return TB_ERR;
