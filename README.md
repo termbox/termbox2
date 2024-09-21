@@ -124,5 +124,6 @@ Other wrapper libraries:
 * [matrix-tui](https://github.com/git-bruh/matrix-tui) - Matrix client
 * [Vgmi](https://github.com/RealMelkor/Vgmi) - Gemini client
 * [poe](https://sr.ht/~strahinja/poe/) - `.po` file editor
+* [xtxf](https://github.com/charlesrocket/xtxf) - 2D matrix screensaver
 
 [^1]: See https://github.com/termbox/termbox2/pull/75#issuecomment-2252242269
