@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <locale.h>
 #include "../termbox2.h"
 
 struct key {
@@ -693,6 +694,8 @@ int main(int argc, char **argv)
 {
     (void) argc; (void) argv;
     int ret;
+
+    setlocale(LC_ALL, "");
 
     ret = tb_init();
     if (ret) {
