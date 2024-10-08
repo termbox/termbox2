@@ -2220,8 +2220,8 @@ static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
         if (!next) {
             // We need to add a new child to node
             node->nchildren += 1;
-            node->children =
-                tb_realloc(node->children, sizeof(*node) * node->nchildren);
+            node->children = (struct cap_trie_t *)tb_realloc(node->children,
+                sizeof(*node) * node->nchildren);
             if (!node->children) {
                 return TB_ERR_MEM;
             }
@@ -2361,7 +2361,7 @@ static int update_term_size_via_esc(void) {
 #define TB_RESIZE_FALLBACK_MS 1000
 #endif
 
-    char *move_and_report = "\x1b[9999;9999H\x1b[6n";
+    char move_and_report[] = "\x1b[9999;9999H\x1b[6n";
     ssize_t write_rv =
         write(global.wfd, move_and_report, strlen(move_and_report));
     if (write_rv != (ssize_t)strlen(move_and_report)) {
@@ -2430,7 +2430,10 @@ static int tb_deinit(void) {
         }
     }
 
-    sigaction(SIGWINCH, &(struct sigaction){.sa_handler = SIG_DFL}, NULL);
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = SIG_DFL;
+    sigaction(SIGWINCH, &sa, NULL);
     if (global.resize_pipefd[0] >= 0) close(global.resize_pipefd[0]);
     if (global.resize_pipefd[1] >= 0) close(global.resize_pipefd[1]);
 
@@ -2537,7 +2540,7 @@ static int read_terminfo_path(const char *path) {
     }
 
     size_t fsize = st.st_size;
-    char *data = tb_malloc(fsize);
+    char *data = (char *)tb_malloc(fsize);
     if (!data) {
         fclose(fp);
         return TB_ERR;
@@ -2848,7 +2851,7 @@ static int extract_esc_cap(struct tb_event *event) {
 static int extract_esc_mouse(struct tb_event *event) {
     struct bytebuf_t *in = &global.in;
 
-    enum type { TYPE_VT200 = 0, TYPE_1006, TYPE_1015, TYPE_MAX };
+    enum { TYPE_VT200 = 0, TYPE_1006, TYPE_1015, TYPE_MAX };
 
     const char *cmp[TYPE_MAX] = {//
         // X10 mouse encoding, the simplest one
@@ -2860,7 +2863,7 @@ static int extract_esc_mouse(struct tb_event *event) {
         // urxvt: \x1b [ Cb ; Cx ; Cy M
         [TYPE_1015] = "\x1b["};
 
-    enum type type = 0;
+    int type = 0;
     int ret = TB_ERR;
 
     // Unrolled at compile-time (probably)
@@ -3358,7 +3361,7 @@ static int cell_free(struct tb_cell *cell) {
 }
 
 static int cellbuf_init(struct cellbuf_t *c, int w, int h) {
-    c->cells = tb_malloc(sizeof(struct tb_cell) * w * h);
+    c->cells = (struct tb_cell *)tb_malloc(sizeof(struct tb_cell) * w * h);
     if (!c->cells) {
         return TB_ERR_MEM;
     }
@@ -3491,9 +3494,9 @@ static int bytebuf_reserve(struct bytebuf_t *b, size_t sz) {
     }
     char *newbuf;
     if (b->buf) {
-        newbuf = tb_realloc(b->buf, newcap);
+        newbuf = (char *)tb_realloc(b->buf, newcap);
     } else {
-        newbuf = tb_malloc(newcap);
+        newbuf = (char *)tb_malloc(newcap);
     }
     if (!newbuf) {
         return TB_ERR_MEM;
