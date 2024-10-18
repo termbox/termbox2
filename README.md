@@ -113,6 +113,7 @@ Other wrapper libraries:
 * [termbox2-zig (Zig)](https://sr.ht/~kolunmi/termbox2-zig)
 * [termbox2-node (JavaScript)](https://github.com/RauliL/termbox2-node)
 * [letloop's termbox2 (Chez Scheme)](https://github.com/letloop/letloop/)
+* [odin-termbox2 (Odin)](https://github.com/sudokit/odin-termbox2)
 
 ### Examples
 
