@@ -26,9 +26,7 @@ $test = new class() {
                 $this->test = $test;
             }
             public function __call(string $name, array $args) {
-                if ($name !== 'tb_set_cell') {
-                    $this->test->log("ffi $name " . json_encode($args));
-                }
+                $this->test->log("ffi $name " . json_encode($args));
                 return $this->ffi->$name(...$args);
             }
         };
