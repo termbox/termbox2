@@ -1778,11 +1778,11 @@ int tb_extend_cell(int x, int y, uint32_t ch) {
     if_err_return(rv, cellbuf_get(&global.back, x, y, &cell));
     if (cell->nech > 0) { // append to ech
         nech = cell->nech + 1;
-        if_err_return(rv, cell_reserve_ech(cell, nech));
+        if_err_return(rv, cell_reserve_ech(cell, nech + 1));
         cell->ech[nech - 1] = ch;
     } else { // make new ech
         nech = 2;
-        if_err_return(rv, cell_reserve_ech(cell, nech));
+        if_err_return(rv, cell_reserve_ech(cell, nech + 1));
         cell->ech[0] = cell->ch;
         cell->ech[1] = ch;
     }
