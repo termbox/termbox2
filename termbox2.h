@@ -3324,7 +3324,7 @@ static int cell_set(struct tb_cell *cell, uint32_t *ch, size_t nch,
     } else {
         int rv;
         if_err_return(rv, cell_reserve_ech(cell, nch + 1));
-        memcpy(cell->ech, ch, sizeof(ch) * nch);
+        memcpy(cell->ech, ch, sizeof(*ch) * nch);
         cell->ech[nch] = '\0';
         cell->nech = nch;
     }
