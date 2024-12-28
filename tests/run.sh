@@ -15,7 +15,7 @@ main() {
     check_deps
 
     # loop through each 'test_*' dir
-    for test_php in $(find . -type f -wholename '*/test_*/test.php'); do
+    for test_php in $(find . -type f -wholename '*/test_*/test.php' | sort); do
         local test_dir=$(dirname $test_php)
         local test_name=$(basename $test_dir)
 
