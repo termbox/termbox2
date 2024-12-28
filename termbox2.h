@@ -65,7 +65,7 @@ extern "C" {
 
 // __ffi_start
 
-#define TB_VERSION_STR "2.5.0-dev"
+#define TB_VERSION_STR "2.5.0"
 
 /* The following compile-time options are supported:
  *
