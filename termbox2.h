@@ -3340,7 +3340,7 @@ static int cell_reserve_ech(struct tb_cell *cell, size_t n) {
     if (cell->cech >= n) {
         return TB_OK;
     }
-    if (!(cell->ech = tb_realloc(cell->ech, n * sizeof(cell->ch)))) {
+    if (!(cell->ech = (uint32_t*)tb_realloc(cell->ech, n * sizeof(cell->ch)))) {
         return TB_ERR_MEM;
     }
     cell->cech = n;
