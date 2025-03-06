@@ -52,6 +52,7 @@ SOFTWARE.
 #include <unistd.h>
 #include <wchar.h>
 #include <wctype.h>
+#include <locale.h>
 
 #ifdef PATH_MAX
 #define TB_PATH_MAX PATH_MAX
