@@ -1574,6 +1574,7 @@ static int bytebuf_reserve(struct bytebuf_t *b, size_t sz);
 static int bytebuf_free(struct bytebuf_t *b);
 
 int tb_init(void) {
+    setlocale(LC_CTYPE, "C.UTF-8"); // Required for iswprint(3) to work properly
     return tb_init_file("/dev/tty");
 }
 
