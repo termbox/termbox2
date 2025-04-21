@@ -21,12 +21,19 @@ $test = new class() {
         return new class($ffi, $this) {
             private FFI $ffi;
             private object $test;
+            private bool $quiet;
             public function __construct($ffi, $test) {
                 $this->ffi = $ffi;
                 $this->test = $test;
+                $this->quiet = false;
+            }
+            public function quiet($on_off) {
+                $this->quiet = $on_off;
             }
             public function __call(string $name, array $args) {
-                $this->test->log("ffi $name " . json_encode($args));
+                if (!$this->quiet) {
+                    $this->test->log("ffi $name " . json_encode($args));
+                }
                 return $this->ffi->$name(...$args);
             }
         };
