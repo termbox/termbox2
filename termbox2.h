@@ -486,7 +486,8 @@ int tb_present(void);
 
 /* Clear the internal front buffer effectively forcing a complete re-render of
  * the back buffer to the tty. It is not necessary to call this under normal
- * circumstances. */
+ * circumstances.
+ */
 int tb_invalidate(void);
 
 /* Set the position of the cursor. Upper-left cell is (0, 0). */
@@ -641,7 +642,8 @@ int tb_poll_event(struct tb_event *event);
 
 /* Internal termbox fds that can be used with `poll(2)`, `select(2)`, etc.
  * externally. Callers must invoke `tb_poll_event` or `tb_peek_event` if
- * fds become readable. */
+ * fds become readable.
+ */
 int tb_get_fds(int *ttyfd, int *resizefd);
 
 /* Print and printf functions. Specify param `out_w` to determine width of
@@ -724,7 +726,7 @@ int tb_wcwidth(uint32_t ch);
  *   TB_TRUECOLOR_BOLD      (use TB_BOLD)
  *   TB_TRUECOLOR_UNDERLINE (use TB_UNDERLINE)
  *   TB_TRUECOLOR_REVERSE   (use TB_REVERSE)
- *   TB_TRUECOLOR_ITALIC    (use TB_ITALICe)
+ *   TB_TRUECOLOR_ITALIC    (use TB_ITALIC)
  *   TB_TRUECOLOR_BLINK     (use TB_BLINK)
  *   TB_TRUECOLOR_BLACK     (use TB_HI_BLACK)
  *   tb_cell_buffer
@@ -1141,7 +1143,7 @@ static struct {
     const uint16_t key;
     const uint8_t mod;
 } builtin_mod_caps[] = {
-  // xterm arrows
+    // xterm arrows
     {"\x1b[1;2A",    TB_KEY_ARROW_UP,    TB_MOD_SHIFT                           },
     {"\x1b[1;3A",    TB_KEY_ARROW_UP,    TB_MOD_ALT                             },
     {"\x1b[1;4A",    TB_KEY_ARROW_UP,    TB_MOD_ALT | TB_MOD_SHIFT              },
@@ -1174,7 +1176,7 @@ static struct {
     {"\x1b[1;7D",    TB_KEY_ARROW_LEFT,  TB_MOD_CTRL | TB_MOD_ALT               },
     {"\x1b[1;8D",    TB_KEY_ARROW_LEFT,  TB_MOD_CTRL | TB_MOD_ALT | TB_MOD_SHIFT},
 
- // xterm keys
+    // xterm keys
     {"\x1b[1;2H",    TB_KEY_HOME,        TB_MOD_SHIFT                           },
     {"\x1b[1;3H",    TB_KEY_HOME,        TB_MOD_ALT                             },
     {"\x1b[1;4H",    TB_KEY_HOME,        TB_MOD_ALT | TB_MOD_SHIFT              },
@@ -1319,7 +1321,7 @@ static struct {
     {"\x1b[24;7~",   TB_KEY_F12,         TB_MOD_CTRL | TB_MOD_ALT               },
     {"\x1b[24;8~",   TB_KEY_F12,         TB_MOD_CTRL | TB_MOD_ALT | TB_MOD_SHIFT},
 
- // rxvt arrows
+    // rxvt arrows
     {"\x1b[a",       TB_KEY_ARROW_UP,    TB_MOD_SHIFT                           },
     {"\x1b\x1b[A",   TB_KEY_ARROW_UP,    TB_MOD_ALT                             },
     {"\x1b\x1b[a",   TB_KEY_ARROW_UP,    TB_MOD_ALT | TB_MOD_SHIFT              },
@@ -1344,7 +1346,7 @@ static struct {
     {"\x1bOd",       TB_KEY_ARROW_LEFT,  TB_MOD_CTRL                            },
     {"\x1b\x1bOd",   TB_KEY_ARROW_LEFT,  TB_MOD_CTRL | TB_MOD_ALT               },
 
- // rxvt keys
+    // rxvt keys
     {"\x1b[7$",      TB_KEY_HOME,        TB_MOD_SHIFT                           },
     {"\x1b\x1b[7~",  TB_KEY_HOME,        TB_MOD_ALT                             },
     {"\x1b\x1b[7$",  TB_KEY_HOME,        TB_MOD_ALT | TB_MOD_SHIFT              },
@@ -1489,13 +1491,13 @@ static struct {
     {"\x1b[24@",     TB_KEY_F12,         TB_MOD_CTRL | TB_MOD_SHIFT             },
     {"\x1b[24$",     TB_KEY_F12,         TB_MOD_SHIFT                           },
 
- // linux console/putty arrows
+    // linux console/putty arrows
     {"\x1b[A",       TB_KEY_ARROW_UP,    TB_MOD_SHIFT                           },
     {"\x1b[B",       TB_KEY_ARROW_DOWN,  TB_MOD_SHIFT                           },
     {"\x1b[C",       TB_KEY_ARROW_RIGHT, TB_MOD_SHIFT                           },
     {"\x1b[D",       TB_KEY_ARROW_LEFT,  TB_MOD_SHIFT                           },
 
- // more putty arrows
+    // more putty arrows
     {"\x1bOA",       TB_KEY_ARROW_UP,    TB_MOD_CTRL                            },
     {"\x1b\x1bOA",   TB_KEY_ARROW_UP,    TB_MOD_CTRL | TB_MOD_ALT               },
     {"\x1bOB",       TB_KEY_ARROW_DOWN,  TB_MOD_CTRL                            },
@@ -1526,8 +1528,9 @@ static const unsigned char utf8_mask[6] = {0x7f, 0x1f, 0x0f, 0x07, 0x03, 0x01};
 static struct {
     uint32_t range_start;
     uint32_t range_end;
-    int width; // -1 means iswprint==0, otherwise wcwidth value
+    int width; // -1 means iswprint==0, otherwise wcwidth value (0, 1, or 2)
 } wcwidth_table[] = {
+    // clang-format off
     {0x000001, 0x00001f, -1}, {0x000020, 0x00007e,  1}, {0x00007f, 0x00009f, -1},
     {0x0000a0, 0x0002ff,  1}, {0x000300, 0x00036f,  0}, {0x000370, 0x000377,  1},
     {0x000378, 0x000379, -1}, {0x00037a, 0x00037f,  1}, {0x000380, 0x000383, -1},
@@ -2243,6 +2246,7 @@ static struct {
     {0x0e0080, 0x0e00ff, -1}, {0x0e0100, 0x0e01ef,  0}, {0x0e01f0, 0x0effff, -1},
     {0x0f0000, 0x0ffffd,  1}, {0x0ffffe, 0x0fffff, -1}, {0x100000, 0x10fffd,  1},
     {0x10fffe, 0x10ffff, -1},
+    // clang-format on
 };
 #define WCWIDTH_TABLE_LENGTH 2143
 #endif // ifndef TB_OPT_LIBC_WCHAR
@@ -2347,9 +2351,7 @@ int tb_init_rwfd(int rfd, int wfd) {
         global.initialized = 1;
     } while (0);
 
-    if (rv != TB_OK) {
-        tb_deinit();
-    }
+    if (rv != TB_OK) tb_deinit();
 
     return rv;
 }
@@ -2406,10 +2408,9 @@ int tb_present(void) {
                     w = tb_wcswidth(back->ech, back->nech);
                 else
 #endif
-                    // wcwidth simply returns -1 on overflow of wchar_t
                     w = tb_wcwidth((wchar_t)back->ch);
             }
-            if (w < 1) w = 1;
+            if (w < 1) w = 1; // wcwidth qreturns -1 for invalid codepoints
 
             if (cell_cmp(back, front) != 0) {
                 cell_copy(front, back);
@@ -2507,6 +2508,7 @@ int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
 int tb_extend_cell(int x, int y, uint32_t ch) {
     if_not_init_return();
 #ifdef TB_OPT_EGC
+    // TODO: iswprint ch?
     int rv;
     struct tb_cell *cell;
     size_t nech;
@@ -2534,16 +2536,15 @@ int tb_extend_cell(int x, int y, uint32_t ch) {
 
 int tb_set_input_mode(int mode) {
     if_not_init_return();
-    if (mode == TB_INPUT_CURRENT) {
-        return global.input_mode;
-    }
 
-    if ((mode & (TB_INPUT_ESC | TB_INPUT_ALT)) == 0) {
+    if (mode == TB_INPUT_CURRENT) return global.input_mode;
+
+    int esc_or_alt = TB_INPUT_ESC | TB_INPUT_ALT;
+    if ((mode & esc_or_alt) == 0) {
+        // neither specified; flip on ESC
         mode |= TB_INPUT_ESC;
-    }
-
-    if ((mode & (TB_INPUT_ESC | TB_INPUT_ALT)) == (TB_INPUT_ESC | TB_INPUT_ALT))
-    {
+    } else if ((mode & esc_or_alt) == esc_or_alt) {
+        // both specified; flip off ALT
         mode &= ~TB_INPUT_ALT;
     }
 
@@ -2865,9 +2866,7 @@ static int tb_reset(void) {
 }
 
 static int init_term_attrs(void) {
-    if (global.ttyfd < 0) {
-        return TB_OK;
-    }
+    if (global.ttyfd < 0) return TB_OK;
 
     if (tcgetattr(global.ttyfd, &global.orig_tios) != 0) {
         global.last_errno = errno;
@@ -3018,9 +3017,7 @@ static int cap_trie_deinit(struct cap_trie_t *node) {
     for (j = 0; j < node->nchildren; j++) {
         cap_trie_deinit(&node->children[j]);
     }
-    if (node->children) {
-        tb_free(node->children);
-    }
+    if (node->children) tb_free(node->children);
     memset(node, 0, sizeof(*node));
     return TB_OK;
 }
@@ -3071,9 +3068,7 @@ static int send_clear(void) {
 static int update_term_size(void) {
     int rv, ioctl_errno;
 
-    if (global.ttyfd < 0) {
-        return TB_OK;
-    }
+    if (global.ttyfd < 0) return TB_OK;
 
     struct winsize sz;
     memset(&sz, 0, sizeof(sz));
@@ -3195,15 +3190,11 @@ static int load_terminfo(void) {
     // this behavior. Some of these paths are compile-time ncurses options, so
     // best guesses are used here.
     const char *term = getenv("TERM");
-    if (!term) {
-        return TB_ERR;
-    }
+    if (!term) return TB_ERR;
 
     // If TERMINFO is set, try that directory and stop
     const char *terminfo = getenv("TERMINFO");
-    if (terminfo) {
-        return load_terminfo_from_path(terminfo, term);
-    }
+    if (terminfo) return load_terminfo_from_path(terminfo, term);
 
     // Next try ~/.terminfo
     const char *home = getenv("HOME");
@@ -3266,9 +3257,7 @@ static int load_terminfo_from_path(const char *path, const char *term) {
 
 static int read_terminfo_path(const char *path) {
     FILE *fp = fopen(path, "rb");
-    if (!fp) {
-        return TB_ERR;
-    }
+    if (!fp) return TB_ERR;
 
     struct stat st;
     if (fstat(fileno(fp), &st) != 0) {
@@ -3301,9 +3290,7 @@ static int parse_terminfo_caps(void) {
     // description of this behavior.
 
     // Ensure there's at least a header's worth of data
-    if (global.nterminfo < 6) {
-        return TB_ERR;
-    }
+    if (global.nterminfo < 6) return TB_ERR;
 
     int16_t *header = (int16_t *)global.terminfo;
     // header[0] the magic number (octal 0432 or 01036)
@@ -3352,9 +3339,7 @@ static int load_builtin_caps(void) {
     int i, j;
     const char *term = getenv("TERM");
 
-    if (!term) {
-        return TB_ERR_NO_TERM;
-    }
+    if (!term) return TB_ERR_NO_TERM;
 
     // Check for exact TERM match
     for (i = 0; builtin_terms[i].name != NULL; i++) {
@@ -3409,8 +3394,10 @@ static const char *get_terminfo_string(int16_t str_offsets_pos,
         // Truncated/corrupt terminfo entry?
         return NULL;
     }
-    return (
-        const char *)(global.terminfo + (int)str_table_pos + (int)*str_offset);
+
+    const char *string =
+        global.terminfo + (int)str_table_pos + (int)*str_offset;
+    return string;
 }
 
 static int wait_event(struct tb_event *event, int timeout) {
@@ -3481,9 +3468,7 @@ static int extract_event(struct tb_event *event) {
     int rv;
     struct bytebuf_t *in = &global.in;
 
-    if (in->len == 0) {
-        return TB_ERR;
-    }
+    if (in->len == 0) return TB_ERR;
 
     if (in->buf[0] == '\x1b') {
         // Escape sequence?
@@ -3509,8 +3494,9 @@ static int extract_event(struct tb_event *event) {
     }
 
     // ASCII control key?
-    if ((uint16_t)in->buf[0] < TB_KEY_SPACE || in->buf[0] == TB_KEY_BACKSPACE2)
-    {
+    int is_ctrl =
+        (uint16_t)in->buf[0] < TB_KEY_SPACE || in->buf[0] == TB_KEY_BACKSPACE2;
+    if (is_ctrl) {
         event->type = TB_EVENT_KEY;
         event->ch = 0;
         event->key = (uint16_t)in->buf[0];
@@ -3549,14 +3535,10 @@ static int extract_esc_user(struct tb_event *event, int is_post) {
 
     fn = is_post ? global.fn_extract_esc_post : global.fn_extract_esc_pre;
 
-    if (!fn) {
-        return TB_ERR;
-    }
+    if (!fn) return TB_ERR;
 
     rv = fn(event, &consumed);
-    if (rv == TB_OK) {
-        bytebuf_shift(in, consumed);
-    }
+    if (rv == TB_OK) bytebuf_shift(in, consumed);
 
     if_ok_or_need_more_return(rv, rv);
     return TB_ERR;
@@ -3756,13 +3738,9 @@ static int extract_esc_mouse(struct tb_event *event) {
             ret = TB_ERR;
     }
 
-    if (buf_shift > 0) {
-        bytebuf_shift(in, buf_shift);
-    }
+    if (buf_shift > 0) bytebuf_shift(in, buf_shift);
 
-    if (ret == TB_OK) {
-        event->type = TB_EVENT_MOUSE;
-    }
+    if (ret == TB_OK) event->type = TB_EVENT_MOUSE;
 
     return ret;
 }
@@ -4050,6 +4028,7 @@ static int cell_copy(struct tb_cell *dst, struct tb_cell *src) {
 
 static int cell_set(struct tb_cell *cell, uint32_t *ch, size_t nch,
     uintattr_t fg, uintattr_t bg) {
+    // TODO: iswprint ch?
     cell->ch = ch ? *ch : 0;
     cell->fg = fg;
     cell->bg = bg;
@@ -4072,12 +4051,9 @@ static int cell_set(struct tb_cell *cell, uint32_t *ch, size_t nch,
 
 static int cell_reserve_ech(struct tb_cell *cell, size_t n) {
 #ifdef TB_OPT_EGC
-    if (cell->cech >= n) {
-        return TB_OK;
-    }
-    if (!(cell->ech = (uint32_t*)tb_realloc(cell->ech, n * sizeof(cell->ch)))) {
-        return TB_ERR_MEM;
-    }
+    if (cell->cech >= n) return TB_OK;
+    cell->ech = (uint32_t *)tb_realloc(cell->ech, n * sizeof(cell->ch));
+    if (!cell->ech) return TB_ERR_MEM;
     cell->cech = n;
     return TB_OK;
 #else
@@ -4089,9 +4065,7 @@ static int cell_reserve_ech(struct tb_cell *cell, size_t n) {
 
 static int cell_free(struct tb_cell *cell) {
 #ifdef TB_OPT_EGC
-    if (cell->ech) {
-        tb_free(cell->ech);
-    }
+    if (cell->ech) tb_free(cell->ech);
 #endif
     memset(cell, 0, sizeof(*cell));
     return TB_OK;
@@ -4099,9 +4073,7 @@ static int cell_free(struct tb_cell *cell) {
 
 static int cellbuf_init(struct cellbuf_t *c, int w, int h) {
     c->cells = (struct tb_cell *)tb_malloc(sizeof(struct tb_cell) * w * h);
-    if (!c->cells) {
-        return TB_ERR_MEM;
-    }
+    if (!c->cells) return TB_ERR_MEM;
     memset(c->cells, 0, sizeof(struct tb_cell) * w * h);
     c->width = w;
     c->height = h;
@@ -4198,9 +4170,7 @@ static int bytebuf_nputs(struct bytebuf_t *b, const char *str, size_t nstr) {
 }
 
 static int bytebuf_shift(struct bytebuf_t *b, size_t n) {
-    if (n > b->len) {
-        n = b->len;
-    }
+    if (n > b->len) n = b->len;
     size_t nmove = b->len - n;
     memmove(b->buf, b->buf + n, nmove);
     b->len -= n;
@@ -4208,9 +4178,7 @@ static int bytebuf_shift(struct bytebuf_t *b, size_t n) {
 }
 
 static int bytebuf_flush(struct bytebuf_t *b, int fd) {
-    if (b->len <= 0) {
-        return TB_OK;
-    }
+    if (b->len <= 0) return TB_OK;
     ssize_t write_rv = write(fd, b->buf, b->len);
     if (write_rv < 0 || (size_t)write_rv != b->len) {
         // Note, errno will be 0 on partial write
@@ -4222,31 +4190,28 @@ static int bytebuf_flush(struct bytebuf_t *b, int fd) {
 }
 
 static int bytebuf_reserve(struct bytebuf_t *b, size_t sz) {
-    if (b->cap >= sz) {
-        return TB_OK;
-    }
+    if (b->cap >= sz) return TB_OK;
+
     size_t newcap = b->cap > 0 ? b->cap : 1;
     while (newcap < sz) {
         newcap *= 2;
     }
+
     char *newbuf;
     if (b->buf) {
         newbuf = (char *)tb_realloc(b->buf, newcap);
     } else {
         newbuf = (char *)tb_malloc(newcap);
     }
-    if (!newbuf) {
-        return TB_ERR_MEM;
-    }
+    if (!newbuf) return TB_ERR_MEM;
+
     b->buf = newbuf;
     b->cap = newcap;
     return TB_OK;
 }
 
 static int bytebuf_free(struct bytebuf_t *b) {
-    if (b->buf) {
-        tb_free(b->buf);
-    }
+    if (b->buf) tb_free(b->buf);
     memset(b, 0, sizeof(*b));
     return TB_OK;
 }
