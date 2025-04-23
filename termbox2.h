@@ -4285,7 +4285,7 @@ static int tb_wcswidth(uint32_t *ch, size_t nch) {
 
 static int tb_iswprint_ex(uint32_t ch, int *w) {
 #ifdef TB_OPT_LIBC_WCHAR
-    if (w) w = wcwidth((wint_t)ch);
+    if (w) *w = wcwidth((wint_t)ch);
     return iswprint(ch);
 #else
     int lo = 0, hi = WCWIDTH_TABLE_LENGTH - 1;
