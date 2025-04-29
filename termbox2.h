@@ -2273,9 +2273,9 @@ static int load_terminfo_from_path(const char *path, const char *term);
 static int read_terminfo_path(const char *path);
 static int parse_terminfo_caps(void);
 static int load_builtin_caps(void);
-static const char *get_terminfo_string(int16_t str_offsets_pos,
-    int16_t str_offsets_len, int16_t str_table_pos, int16_t str_table_len,
-    int16_t str_index);
+static const char *get_terminfo_string(int16_t offsets_pos, int16_t offsets_len,
+    int16_t table_pos, int16_t table_size, int16_t index);
+static int get_terminfo_int16(int offset, int16_t *val);
 static int wait_event(struct tb_event *event, int timeout);
 static int extract_event(struct tb_event *event);
 static int extract_esc(struct tb_event *event);
@@ -3292,39 +3292,47 @@ static int parse_terminfo_caps(void) {
     // Ensure there's at least a header's worth of data
     if (global.nterminfo < 6) return TB_ERR;
 
-    int16_t *header = (int16_t *)global.terminfo;
+    int16_t magic_number, nbytes_names, nbytes_bools, num_ints, num_offsets,
+        nbytes_strings;
+    size_t nbytes_header = 6 * sizeof(int16_t);
     // header[0] the magic number (octal 0432 or 01036)
     // header[1] the size, in bytes, of the names section
     // header[2] the number of bytes in the boolean section
     // header[3] the number of short integers in the numbers section
     // header[4] the number of offsets (short integers) in the strings section
     // header[5] the size, in bytes, of the string table
+    get_terminfo_int16(0 * sizeof(int16_t), &magic_number);
+    get_terminfo_int16(1 * sizeof(int16_t), &nbytes_names);
+    get_terminfo_int16(2 * sizeof(int16_t), &nbytes_bools);
+    get_terminfo_int16(3 * sizeof(int16_t), &num_ints);
+    get_terminfo_int16(4 * sizeof(int16_t), &num_offsets);
+    get_terminfo_int16(5 * sizeof(int16_t), &nbytes_strings);
 
     // Legacy ints are 16-bit, extended ints are 32-bit
-    const int bytes_per_int = header[0] == 01036 ? 4  // 32-bit
-                                                 : 2; // 16-bit
+    const int bytes_per_int = magic_number == 01036 ? 4  // 32-bit
+                                                    : 2; // 16-bit
 
     // > Between the boolean section and the number section, a null byte will be
     // > inserted, if necessary, to ensure that the number section begins on an
     // > even byte
-    const int align_offset = (header[1] + header[2]) % 2 != 0 ? 1 : 0;
+    const int align_offset = (nbytes_names + nbytes_bools) % 2 != 0 ? 1 : 0;
 
     const int pos_str_offsets =
-        (6 * sizeof(int16_t)) // header (12 bytes)
-        + header[1]           // length of names section
-        + header[2]           // length of boolean section
+        nbytes_header  // header (12 bytes)
+        + nbytes_names // length of names section
+        + nbytes_bools // length of boolean section
         + align_offset +
-        (header[3] * bytes_per_int); // length of numbers section
+        (num_ints * bytes_per_int); // length of numbers section
 
     const int pos_str_table =
         pos_str_offsets +
-        (header[4] * sizeof(int16_t)); // length of string offsets table
+        (num_offsets * sizeof(int16_t)); // length of string offsets table
 
     // Load caps
     int i;
     for (i = 0; i < TB_CAP__COUNT; i++) {
-        const char *cap = get_terminfo_string(pos_str_offsets, header[4],
-            pos_str_table, header[5], terminfo_cap_indexes[i]);
+        const char *cap = get_terminfo_string(pos_str_offsets, num_offsets,
+            pos_str_table, nbytes_strings, terminfo_cap_indexes[i]);
         if (!cap) {
             // Something is not right
             return TB_ERR;
@@ -3367,37 +3375,46 @@ static int load_builtin_caps(void) {
     return TB_ERR_UNSUPPORTED_TERM;
 }
 
-static const char *get_terminfo_string(int16_t str_offsets_pos,
-    int16_t str_offsets_len, int16_t str_table_pos, int16_t str_table_len,
-    int16_t str_index) {
-    const int str_byte_index = (int)str_index * (int)sizeof(int16_t);
-    if (str_byte_index >= (int)str_offsets_len * (int)sizeof(int16_t)) {
-        // An offset beyond the table indicates absent
+static const char *get_terminfo_string(int16_t offsets_pos, int16_t offsets_len,
+    int16_t table_pos, int16_t table_size, int16_t index) {
+    if (index >= offsets_len) {
+        // An index beyond the offset table indicates absent
         // See `convert_strings` in tinfo `read_entry.c`
         return "";
     }
-    const int16_t *str_offset =
-        (int16_t *)(global.terminfo + (int)str_offsets_pos + str_byte_index);
-    if ((char *)str_offset >= global.terminfo + global.nterminfo) {
-        // str_offset points beyond end of entry
-        // Truncated/corrupt terminfo entry?
-        return NULL;
-    }
-    if (*str_offset < 0 || *str_offset >= str_table_len) {
-        // A negative offset indicates absent
-        // An offset beyond the table indicates absent
-        // See `convert_strings` in tinfo `read_entry.c`
-        return "";
-    }
-    if (((size_t)((int)str_table_pos + (int)*str_offset)) >= global.nterminfo) {
-        // string points beyond end of entry
+
+    int16_t table_offset;
+    int table_offset_offset = (int)offsets_pos + (index * (int)sizeof(int16_t));
+    if (get_terminfo_int16(table_offset_offset, &table_offset) != TB_OK) {
+        // offset beyond end of terminfo entry
         // Truncated/corrupt terminfo entry?
         return NULL;
     }
 
-    const char *string =
-        global.terminfo + (int)str_table_pos + (int)*str_offset;
-    return string;
+    if (table_offset < 0 || table_offset >= table_size) {
+        // A negative offset indicates absent
+        // An offset beyond the string table indicates absent
+        // See `convert_strings` in tinfo `read_entry.c`
+        return "";
+    }
+
+    int str_offset = (int)table_pos + (int)table_offset;
+    if (str_offset >= (int)global.nterminfo) {
+        // string beyond end of terminfo entry
+        // Truncated/corrupt terminfo entry?
+        return NULL;
+    }
+
+    return (const char *)(global.terminfo + str_offset);
+}
+
+static int get_terminfo_int16(int offset, int16_t *val) {
+    if (offset < 0 || offset >= (int)global.nterminfo) {
+        *val = -1;
+        return TB_ERR;
+    }
+    memcpy(val, global.terminfo + offset, sizeof(int16_t));
+    return TB_OK;
 }
 
 static int wait_event(struct tb_event *event, int timeout) {
