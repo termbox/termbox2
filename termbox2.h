@@ -3290,7 +3290,7 @@ static int parse_terminfo_caps(void) {
     // description of this behavior.
 
     // Ensure there's at least a header's worth of data
-    if (global.nterminfo < 6) return TB_ERR;
+    if (global.nterminfo < 6 * (int)sizeof(int16_t)) return TB_ERR;
 
     int16_t magic_number, nbytes_names, nbytes_bools, num_ints, num_offsets,
         nbytes_strings;
