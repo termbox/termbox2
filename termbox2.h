@@ -3290,7 +3290,7 @@ static int parse_terminfo_caps(void) {
     // description of this behavior.
 
     // Ensure there's at least a header's worth of data
-    if (global.nterminfo < 6) return TB_ERR;
+    if (global.nterminfo < 6 * (int)sizeof(int16_t)) return TB_ERR;
 
     int16_t *header = (int16_t *)global.terminfo;
     // header[0] the magic number (octal 0432 or 01036)
