@@ -3700,10 +3700,10 @@ static int extract_esc_mouse(struct tb_event *event) {
                 int start = (type == TYPE_1015 ? 2 : 3);
 
                 unsigned n1 = strtoul(&in->buf[start], NULL, 10);
-                unsigned n2 =
-                    strtoul(&in->buf[indices[FIRST_SEMICOLON] + 1], NULL, 10);
-                unsigned n3 =
-                    strtoul(&in->buf[indices[LAST_SEMICOLON] + 1], NULL, 10);
+                int n2 =
+                    atoi(&in->buf[indices[FIRST_SEMICOLON] + 1]);
+                int n3 =
+                    atoi(&in->buf[indices[LAST_SEMICOLON] + 1]);
 
                 if (type == TYPE_1015) {
                     n1 -= 0x20;
@@ -3744,8 +3744,8 @@ static int extract_esc_mouse(struct tb_event *event) {
                         event->mod |= TB_MOD_MOTION;
                     }
 
-                    event->x = ((uint8_t)n2) - 1;
-                    event->y = ((uint8_t)n3) - 1;
+                    event->x = (n2 - 1 < 0) ? 0 : n2 - 1;
+                    event->y = (n3 - 1 < 0) ? 0 : n3 - 1;
 
                     ret = TB_OK;
                 }
