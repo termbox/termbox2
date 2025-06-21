@@ -118,6 +118,7 @@ Other wrapper libraries:
 ### Examples
 
 * [mle](https://github.com/adsr/mle) - flexible terminal-based text editor
+* [newsraft](https://codeberg.org/newsraft/newsraft) - feed reader for terminal
 * [ictree](https://github.com/NikitaIvanovV/ictree) - like tree but interactive
 * [lavat](https://github.com/AngelJumbo/lavat) - lava lamp for the terminal
 * [termbox-tetris](https://github.com/zacharygraber/termbox-tetris) - Tetris clone
