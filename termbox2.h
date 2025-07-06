@@ -3192,9 +3192,9 @@ static int load_terminfo(void) {
     const char *term = getenv("TERM");
     if (!term) return TB_ERR;
 
-    // If TERMINFO is set, try that directory and stop
+    // If TERMINFO is set, try that directory first
     const char *terminfo = getenv("TERMINFO");
-    if (terminfo) return load_terminfo_from_path(terminfo, term);
+    if (terminfo) if_ok_return(rv, load_terminfo_from_path(terminfo, term));
 
     // Next try ~/.terminfo
     const char *home = getenv("HOME");
