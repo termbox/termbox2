@@ -3409,7 +3409,7 @@ static const char *get_terminfo_string(int16_t offsets_pos, int16_t offsets_len,
 }
 
 static int get_terminfo_int16(int offset, int16_t *val) {
-    if (offset < 0 || offset >= (int)global.nterminfo) {
+    if (offset < 0 || offset + sizeof(int16_t) > global.nterminfo) {
         *val = -1;
         return TB_ERR;
     }
