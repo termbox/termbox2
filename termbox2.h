@@ -65,7 +65,7 @@ extern "C" {
 
 // __ffi_start
 
-#define TB_VERSION_STR "2.6.0-dev"
+#define TB_VERSION_STR "2.7.0-dev"
 
 /* The following compile-time options are supported:
  *
@@ -511,6 +511,25 @@ int tb_set_cell(int x, int y, uint32_t ch, uintattr_t fg, uintattr_t bg);
 int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
     uintattr_t bg);
 int tb_extend_cell(int x, int y, uint32_t ch);
+
+/* Return a pointer to the cell at the specified position.
+ *
+ * Cell memory may be invalid or freed after subsequent library calls, so
+ * callers must copy any data that they need to persist across calls. Modifying
+ * cell memory results in undefined behavior.
+ *
+ * Callers may use pointer math to access cells relative to the requested one.
+ * The cell grid memory layout is a contiguous array indexable by the expression
+ * `(y * width) + x`.
+ *
+ * If `back` is non-zero, return cell from the internal back buffer. Otherwise,
+ * return cell from the front buffer. Note the front buffer is updated on each
+ * call to `tb_present`, whereas the back buffer is updated immediately by
+ * `tb_set_cell` and other functions that modify cell contents.
+ *
+ * If the position is invalid, `TB_ERR_OUT_OF_BOUNDS` is returned.
+ */
+int tb_get_cell(int x, int y, int back, struct tb_cell **cell);
 
 /* Set the input mode. Termbox has two input modes:
  *
@@ -2503,6 +2522,11 @@ int tb_set_cell_ex(int x, int y, uint32_t *ch, size_t nch, uintattr_t fg,
     if_err_return(rv, cellbuf_get(&global.back, x, y, &cell));
     if_err_return(rv, cell_set(cell, ch, nch, fg, bg));
     return TB_OK;
+}
+
+int tb_get_cell(int x, int y, int back, struct tb_cell **cell) {
+    if_not_init_return();
+    return cellbuf_get(back ? &global.back : &global.front, x, y, cell);
 }
 
 int tb_extend_cell(int x, int y, uint32_t ch) {
