@@ -3586,180 +3586,151 @@ static int extract_esc_cap(struct tb_event *event) {
 
 static int extract_esc_mouse(struct tb_event *event) {
     struct bytebuf_t *in = &global.in;
+    size_t buf_shift = 0;
 
+    // Bail if not enough to determine type
+    if (in->len < 2) {
+        return TB_ERR_NEED_MORE;
+    } else if (in->buf[1] != '[') {
+        return TB_ERR;
+    } else if (in->len < 3) {
+        return TB_ERR_NEED_MORE;
+    }
+
+    // Discern type of mouse event from 3rd byte
+    int type = 0;
     enum { TYPE_VT200 = 0, TYPE_1006, TYPE_1015, TYPE_MAX };
-
-    const char *cmp[TYPE_MAX] = {//
+    if (in->buf[2] == 'M') {
         // X10 mouse encoding, the simplest one
         // \x1b [ M Cb Cx Cy
-        [TYPE_VT200] = "\x1b[M",
+        type = TYPE_VT200;
+    } else if (in->buf[2] == '<') {
         // xterm 1006 extended mode or urxvt 1015 extended mode
         // xterm: \x1b [ < Cb ; Cx ; Cy (M or m)
-        [TYPE_1006] = "\x1b[<",
+        type = TYPE_1006;
+    } else {
         // urxvt: \x1b [ Cb ; Cx ; Cy M
-        [TYPE_1015] = "\x1b["};
+        type = TYPE_1015;
+    }
 
-    int type = 0;
-    int ret = TB_ERR;
+    switch (type) {
+        case TYPE_VT200: {
+            // In this mode, we need 6 bytes
+            if (in->len < 6) return TB_ERR_NEED_MORE;
 
-    // Unrolled at compile-time (probably)
-    for (; type < TYPE_MAX; type++) {
-        size_t size = strlen(cmp[type]);
+            int b = in->buf[3] - 0x20;
 
-        if (in->len >= size && (strncmp(cmp[type], in->buf, size)) == 0) {
+            switch (b & 3) {
+                case 0:
+                    event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
+                                                 : TB_KEY_MOUSE_LEFT;
+                    break;
+                case 1:
+                    event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
+                                                 : TB_KEY_MOUSE_MIDDLE;
+                    break;
+                case 2:
+                    event->key = TB_KEY_MOUSE_RIGHT;
+                    break;
+                case 3:
+                    event->key = TB_KEY_MOUSE_RELEASE;
+                    break;
+                default:
+                    return TB_ERR;
+            }
+
+            if ((b & 32) != 0) event->mod |= TB_MOD_MOTION;
+
+            // the coord is 1,1 for upper left
+            event->x = ((uint8_t)in->buf[4]) - 0x21;
+            event->y = ((uint8_t)in->buf[5]) - 0x21;
+
+            // Eat 6 bytes
+            buf_shift = 6;
+            break;
+        }
+
+        case TYPE_1006:
+            // fallthrough
+
+        case TYPE_1015: {
+            int num[3] = {-1, -1, -1};
+            int num_i = 0;
+            int cur_num = -1;
+            char trail = ' ';
+
+            size_t i = 2;
+            if (type == TYPE_1006) ++i; // skip '<'
+
+            // Parse %d;%d;%d[mM] into `num`
+            while (i < in->len && num_i < 3) {
+                char c = in->buf[i];
+                if (c >= '0' && c <= '9') {
+                    // Digit
+                    if (cur_num == -1) cur_num = 0;
+                    cur_num *= 10;
+                    cur_num += (int)(c - '0');
+                } else if (cur_num != -1 &&
+                           ((num_i < 2 && c == ';') ||
+                               (num_i == 2 && (c == 'm' || c == 'M'))))
+                {
+                    // We're at a semi-colon, 'm', or 'M'
+                    // and we have a number
+                    num[num_i] = cur_num;
+                    ++num_i;
+                    cur_num = -1;
+                    trail = c;
+                } else {
+                    // Something else; not a mouse event
+                    return TB_ERR;
+                }
+                ++i;
+            }
+
+            // If we didn't get to the 3rd number, we need more
+            if (num[2] == -1) return TB_ERR_NEED_MORE;
+
+            // We have a valid mouse event, eat `i` bytes from the buffer
+            buf_shift = i;
+
+            if (type == TYPE_1015) num[0] -= 0x20;
+
+            switch (num[0] & 3) {
+                case 0:
+                    event->key = ((num[0] & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
+                                                      : TB_KEY_MOUSE_LEFT;
+                    break;
+                case 1:
+                    event->key = ((num[0] & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
+                                                      : TB_KEY_MOUSE_MIDDLE;
+                    break;
+                case 2:
+                    event->key = TB_KEY_MOUSE_RIGHT;
+                    break;
+                case 3:
+                    event->key = TB_KEY_MOUSE_RELEASE;
+                    break;
+                default:
+                    return TB_ERR;
+            }
+
+            // on xterm mouse release is signaled by lowercase m
+            if (trail == 'm') event->key = TB_KEY_MOUSE_RELEASE;
+
+            if ((num[0] & 32) != 0) event->mod |= TB_MOD_MOTION;
+
+            event->x = (num[1] - 1 < 0) ? 0 : num[1] - 1;
+            event->y = (num[2] - 1 < 0) ? 0 : num[2] - 1;
+
             break;
         }
     }
 
-    if (type == TYPE_MAX) {
-        ret = TB_ERR; // No match
-        return ret;
-    }
-
-    size_t buf_shift = 0;
-
-    switch (type) {
-        case TYPE_VT200:
-            if (in->len >= 6) {
-                int b = in->buf[3] - 0x20;
-                int fail = 0;
-
-                switch (b & 3) {
-                    case 0:
-                        event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
-                                                     : TB_KEY_MOUSE_LEFT;
-                        break;
-                    case 1:
-                        event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
-                                                     : TB_KEY_MOUSE_MIDDLE;
-                        break;
-                    case 2:
-                        event->key = TB_KEY_MOUSE_RIGHT;
-                        break;
-                    case 3:
-                        event->key = TB_KEY_MOUSE_RELEASE;
-                        break;
-                    default:
-                        ret = TB_ERR;
-                        fail = 1;
-                        break;
-                }
-
-                if (!fail) {
-                    if ((b & 32) != 0) {
-                        event->mod |= TB_MOD_MOTION;
-                    }
-
-                    // the coord is 1,1 for upper left
-                    event->x = ((uint8_t)in->buf[4]) - 0x21;
-                    event->y = ((uint8_t)in->buf[5]) - 0x21;
-
-                    ret = TB_OK;
-                }
-
-                buf_shift = 6;
-            }
-            break;
-        case TYPE_1006:
-            // fallthrough
-        case TYPE_1015: {
-            size_t index_fail = (size_t)-1;
-
-            enum {
-                FIRST_M = 0,
-                FIRST_SEMICOLON,
-                LAST_SEMICOLON,
-                FIRST_LAST_MAX
-            };
-
-            size_t indices[FIRST_LAST_MAX] = {index_fail, index_fail,
-                index_fail};
-            int m_is_capital = 0;
-
-            for (size_t i = 0; i < in->len; i++) {
-                if (in->buf[i] == ';') {
-                    if (indices[FIRST_SEMICOLON] == index_fail) {
-                        indices[FIRST_SEMICOLON] = i;
-                    } else {
-                        indices[LAST_SEMICOLON] = i;
-                    }
-                } else if (indices[FIRST_M] == index_fail) {
-                    if (in->buf[i] == 'm' || in->buf[i] == 'M') {
-                        m_is_capital = (in->buf[i] == 'M');
-                        indices[FIRST_M] = i;
-                    }
-                }
-            }
-
-            if (indices[FIRST_M] == index_fail ||
-                indices[FIRST_SEMICOLON] == index_fail ||
-                indices[LAST_SEMICOLON] == index_fail)
-            {
-                ret = TB_ERR;
-            } else {
-                int start = (type == TYPE_1015 ? 2 : 3);
-
-                unsigned n1 = strtoul(&in->buf[start], NULL, 10);
-                int n2 =
-                    atoi(&in->buf[indices[FIRST_SEMICOLON] + 1]);
-                int n3 =
-                    atoi(&in->buf[indices[LAST_SEMICOLON] + 1]);
-
-                if (type == TYPE_1015) {
-                    n1 -= 0x20;
-                }
-
-                int fail = 0;
-
-                switch (n1 & 3) {
-                    case 0:
-                        event->key = ((n1 & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
-                                                      : TB_KEY_MOUSE_LEFT;
-                        break;
-                    case 1:
-                        event->key = ((n1 & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
-                                                      : TB_KEY_MOUSE_MIDDLE;
-                        break;
-                    case 2:
-                        event->key = TB_KEY_MOUSE_RIGHT;
-                        break;
-                    case 3:
-                        event->key = TB_KEY_MOUSE_RELEASE;
-                        break;
-                    default:
-                        ret = TB_ERR;
-                        fail = 1;
-                        break;
-                }
-
-                buf_shift = in->len;
-
-                if (!fail) {
-                    if (!m_is_capital) {
-                        // on xterm mouse release is signaled by lowercase m
-                        event->key = TB_KEY_MOUSE_RELEASE;
-                    }
-
-                    if ((n1 & 32) != 0) {
-                        event->mod |= TB_MOD_MOTION;
-                    }
-
-                    event->x = (n2 - 1 < 0) ? 0 : n2 - 1;
-                    event->y = (n3 - 1 < 0) ? 0 : n3 - 1;
-
-                    ret = TB_OK;
-                }
-            }
-        } break;
-        case TYPE_MAX:
-            ret = TB_ERR;
-    }
-
     if (buf_shift > 0) bytebuf_shift(in, buf_shift);
 
-    if (ret == TB_OK) event->type = TB_EVENT_MOUSE;
+    event->type = TB_EVENT_MOUSE;
 
-    return ret;
+    return TB_OK;
 }
 
 static int resize_cellbufs(void) {
