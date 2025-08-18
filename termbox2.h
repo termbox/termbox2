@@ -2354,7 +2354,7 @@ int tb_init_rwfd(int rfd, int wfd) {
     int rv;
 
     tb_reset();
-    global.ttyfd = rfd == wfd && isatty(rfd) ? rfd : -1;
+    global.ttyfd = isatty(rfd) ? rfd : (isatty(wfd) ? wfd : -1);
     global.rfd = rfd;
     global.wfd = wfd;
 
