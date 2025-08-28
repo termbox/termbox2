@@ -1,7 +1,7 @@
 prefix?=/usr/local
 
 termbox_cflags:=-std=c99 -Wall -Wextra -pedantic -Wno-unused-result -g -O0 -D_XOPEN_SOURCE -D_DEFAULT_SOURCE $(CFLAGS)
-termbox_demos:=$(patsubst demo/%.c,demo/%,$(wildcard demo/*.c))
+termbox_demos:=demo/keyboard
 termbox_h:=termbox2.h
 termbox_h_lib:=termbox2.h.lib
 termbox_ffi_h:=termbox2.ffi.h
@@ -27,7 +27,7 @@ endif
 all: $(termbox_demos) $(termbox_so) $(termbox_so_x) $(termbox_a)
 
 $(termbox_demos): %: %.c
-	$(CC) -DTB_IMPL -DTB_LIB_OPTS $(termbox_cflags) $^ -o $@
+	$(CC) -DTB_IMPL -DTB_LIB_OPTS -I. $(termbox_cflags) $^ -o $@
 
 $(termbox_o): $(termbox_h)
 	$(CC) -DTB_IMPL -DTB_LIB_OPTS -fPIC -xc -c $(termbox_cflags) $(termbox_h) -o $@

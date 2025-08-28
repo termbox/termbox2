@@ -3,7 +3,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <locale.h>
-#include "../termbox2.h"
+#include <termbox2.h>
 
 struct key {
     unsigned char x;
