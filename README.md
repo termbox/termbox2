@@ -1,9 +1,10 @@
 # termbox2
 
-termbox2 is a terminal rendering library for creating TUIs. It is a
-[suckless](https://suckless.org) alternative to the ubiquitous
-[ncurses](https://invisible-island.net/ncurses/) library. It ships with built-in
-support for popular terminals and can also fallback to terminfo if present.
+termbox2 is a terminal I/O library for creating TUIs. It is a slim alternative
+to the ubiquitous [ncurses](https://invisible-island.net/ncurses) library.
+Unlike ncurses, it has a tighter API, and comes with built-in support for
+popular terminals if a terminfo db is not present on the system.
+
 Compared to the [original termbox](https://github.com/termbox/termbox), it
 retains a simple API and no dependencies beyond libc, and adds stricter error
 checking, more efficient escape sequence parsing, opt-in support for 32-bit
@@ -48,8 +49,8 @@ int main(int argc, char **argv) {
 
 ### API
 
-The basic API is pretty self-explanatory. Consult the header file itself for the
-complete API and documentation.
+The basic API is pretty self-explanatory. Consult the header file itself for
+the complete API and documentation.
 
 ```c
 int tb_init();
@@ -95,14 +96,14 @@ As mentioned above, there are two options:
 Basic FFI or ABI-compatible examples in the languages below are in the `demo/`
 directory. (Feel free to submit PRs for other languages.)
 
-* D
-* Go
-* Nim
-* PHP
-* Python
-* Ruby
-* Rust
-* Zig
+* [D](demo/example.d)
+* [Go](demo/example.go)
+* [Nim](demo/example.nim)
+* [PHP](demo/example.php)
+* [Python](demo/example.py)
+* [Ruby](demo/example.rb)
+* [Rust](demo/example.rs)
+* [Zig](demo/example.zig)
 
 Other wrapper libraries:
 
@@ -114,6 +115,19 @@ Other wrapper libraries:
 * [termbox2-node (JavaScript)](https://github.com/RauliL/termbox2-node)
 * [letloop's termbox2 (Chez Scheme)](https://github.com/letloop/letloop/)
 * [odin-termbox2 (Odin)](https://github.com/sudokit/odin-termbox2)
+
+### Using termbox2 with other libraries
+
+termbox2 does not contain TUI elements/widgets like input fields, checkboxes,
+scoll bars, etc. These are too complex and opinionated and better off handled
+by a separate library. Here are some widget examples built on top of termbox2:
+
+* [readline](demo/readline.c) - if all you need is a text input
+* [termbox-widgets](https://github.com/git-bruh/termbox-widgets)
+
+termbox2 also does not contain a layout engine for the same reason. However,
+there is at least one layout engine with termbox2 support:
+[Clay](https://github.com/nicbarker/clay).
 
 ### Examples
 
@@ -127,5 +141,7 @@ Other wrapper libraries:
 * [Vgmi](https://github.com/RealMelkor/Vgmi) - Gemini client
 * [poe](https://sr.ht/~strahinja/poe/) - `.po` file editor
 * [xtxf](https://github.com/charlesrocket/xtxf) - 2D matrix screensaver
+* [chatty](https://git.spacehb.net/chatty) - chat application
+* [ly](https://codeberg.org/fairyglade/ly) - TUI display manager for Linux and BSD
 
 [^1]: See https://github.com/termbox/termbox2/pull/75#issuecomment-2252242269
