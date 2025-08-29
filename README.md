@@ -107,6 +107,7 @@ directory. (Feel free to submit PRs for other languages.)
 
 Other wrapper libraries:
 
+* [cl-termbox2 (Common Lisp)](https://github.com/garlic0x1/cl-termbox2)
 * [termbox.cr (Crystal)](https://github.com/thmisch/termbox.cr)
 * [termbox2.cr (Crystal)](https://github.com/homonoidian/termbox2.cr)
 * [Termbox.pm (Perl)](https://github.com/sanko/Termbox.pm)
