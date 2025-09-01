@@ -2391,6 +2391,22 @@ int tb_height(void) {
     return global.height;
 }
 
+int tb_cursor_x(void) {
+    if_not_init_return();
+    return global.cursor_x;
+}
+
+int tb_cursor_y(void) {
+    if_not_init_return();
+    return global.cursor_y;
+}
+
+void tb_cursor_xy(int *x, int *y) {
+    if_not_init_return();
+    *x = global.cursor_x;
+    *y = global.cursor_y;
+}
+
 int tb_clear(void) {
     if_not_init_return();
     return cellbuf_clear(&global.back);
