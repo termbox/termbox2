@@ -787,28 +787,28 @@ int tb_wcwidth(uint32_t ch);
 #define if_not_init_return()                                                   \
     if (!global.initialized) return TB_ERR_NOT_INIT
 
-struct bytebuf_t {
+struct bytebuf {
     char *buf;
     size_t len;
     size_t cap;
 };
 
-struct cellbuf_t {
+struct cellbuf {
     int width;
     int height;
     struct tb_cell *cells;
 };
 
-struct cap_trie_t {
+struct cap_trie {
     char c;
-    struct cap_trie_t *children;
+    struct cap_trie *children;
     size_t nchildren;
     int is_leaf;
     uint16_t key;
     uint8_t mod;
 };
 
-struct tb_global_t {
+struct tb_global {
     int ttyfd;
     int rfd;
     int wfd;
@@ -829,11 +829,11 @@ struct tb_global_t {
     char *terminfo;
     size_t nterminfo;
     const char *caps[TB_CAP__COUNT];
-    struct cap_trie_t cap_trie;
-    struct bytebuf_t in;
-    struct bytebuf_t out;
-    struct cellbuf_t back;
-    struct cellbuf_t front;
+    struct cap_trie cap_trie;
+    struct bytebuf in;
+    struct bytebuf out;
+    struct cellbuf back;
+    struct cellbuf front;
     struct termios orig_tios;
     int has_orig_tios;
     int last_errno;
@@ -843,7 +843,7 @@ struct tb_global_t {
     char errbuf[1024];
 };
 
-static struct tb_global_t global = {0};
+static struct tb_global global = {0};
 
 /* BEGIN codegen c */
 /* Produced by ./codegen.sh on Tue, 03 Sep 2024 04:17:48 +0000 */
@@ -2277,9 +2277,9 @@ static int init_term_attrs(void);
 static int init_term_caps(void);
 static int init_cap_trie(void);
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod);
-static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
+static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie **last,
     size_t *depth);
-static int cap_trie_deinit(struct cap_trie_t *node);
+static int cap_trie_deinit(struct cap_trie *node);
 static int init_resize_handler(void);
 static int send_init_escape_codes(void);
 static int send_clear(void);
@@ -2316,18 +2316,18 @@ static int cell_set(struct tb_cell *cell, uint32_t *ch, size_t nch,
     uintattr_t fg, uintattr_t bg);
 static int cell_reserve_ech(struct tb_cell *cell, size_t n);
 static int cell_free(struct tb_cell *cell);
-static int cellbuf_init(struct cellbuf_t *c, int w, int h);
-static int cellbuf_free(struct cellbuf_t *c);
-static int cellbuf_clear(struct cellbuf_t *c);
-static int cellbuf_get(struct cellbuf_t *c, int x, int y, struct tb_cell **out);
-static int cellbuf_in_bounds(struct cellbuf_t *c, int x, int y);
-static int cellbuf_resize(struct cellbuf_t *c, int w, int h);
-static int bytebuf_puts(struct bytebuf_t *b, const char *str);
-static int bytebuf_nputs(struct bytebuf_t *b, const char *str, size_t nstr);
-static int bytebuf_shift(struct bytebuf_t *b, size_t n);
-static int bytebuf_flush(struct bytebuf_t *b, int fd);
-static int bytebuf_reserve(struct bytebuf_t *b, size_t sz);
-static int bytebuf_free(struct bytebuf_t *b);
+static int cellbuf_init(struct cellbuf *c, int w, int h);
+static int cellbuf_free(struct cellbuf *c);
+static int cellbuf_clear(struct cellbuf *c);
+static int cellbuf_get(struct cellbuf *c, int x, int y, struct tb_cell **out);
+static int cellbuf_in_bounds(struct cellbuf *c, int x, int y);
+static int cellbuf_resize(struct cellbuf *c, int w, int h);
+static int bytebuf_puts(struct bytebuf *b, const char *str);
+static int bytebuf_nputs(struct bytebuf *b, const char *str, size_t nstr);
+static int bytebuf_shift(struct bytebuf *b, size_t n);
+static int bytebuf_flush(struct bytebuf *b, int fd);
+static int bytebuf_reserve(struct bytebuf *b, size_t sz);
+static int bytebuf_free(struct bytebuf *b);
 static int tb_iswprint_ex(uint32_t ch, int *width);
 static int tb_wcswidth(uint32_t *ch, size_t nch);
 
@@ -2961,7 +2961,7 @@ static int init_cap_trie(void) {
 }
 
 static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
-    struct cap_trie_t *next, *node = &global.cap_trie;
+    struct cap_trie *next, *node = &global.cap_trie;
     size_t i, j;
 
     if (!cap || strlen(cap) <= 0) return TB_OK; // Nothing to do for empty caps
@@ -2980,7 +2980,7 @@ static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
         if (!next) {
             // We need to add a new child to node
             node->nchildren += 1;
-            node->children = (struct cap_trie_t *)tb_realloc(node->children,
+            node->children = (struct cap_trie *)tb_realloc(node->children,
                 sizeof(*node) * node->nchildren);
             if (!node->children) {
                 return TB_ERR_MEM;
@@ -3005,9 +3005,9 @@ static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
     return TB_OK;
 }
 
-static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
+static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie **last,
     size_t *depth) {
-    struct cap_trie_t *next, *node = &global.cap_trie;
+    struct cap_trie *next, *node = &global.cap_trie;
     size_t i, j;
     *last = node;
     *depth = 0;
@@ -3036,7 +3036,7 @@ static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie_t **last,
     return TB_OK;
 }
 
-static int cap_trie_deinit(struct cap_trie_t *node) {
+static int cap_trie_deinit(struct cap_trie *node) {
     size_t j;
     for (j = 0; j < node->nchildren; j++) {
         cap_trie_deinit(&node->children[j]);
@@ -3507,7 +3507,7 @@ static int wait_event(struct tb_event *event, int timeout) {
 
 static int extract_event(struct tb_event *event) {
     int rv;
-    struct bytebuf_t *in = &global.in;
+    struct bytebuf *in = &global.in;
 
     if (in->len == 0) return TB_ERR;
 
@@ -3571,7 +3571,7 @@ static int extract_esc(struct tb_event *event) {
 static int extract_esc_user(struct tb_event *event, int is_post) {
     int rv;
     size_t consumed = 0;
-    struct bytebuf_t *in = &global.in;
+    struct bytebuf *in = &global.in;
     int (*fn)(struct tb_event *, size_t *);
 
     fn = is_post ? global.fn_extract_esc_post : global.fn_extract_esc_pre;
@@ -3587,8 +3587,8 @@ static int extract_esc_user(struct tb_event *event, int is_post) {
 
 static int extract_esc_cap(struct tb_event *event) {
     int rv;
-    struct bytebuf_t *in = &global.in;
-    struct cap_trie_t *node;
+    struct bytebuf *in = &global.in;
+    struct cap_trie *node;
     size_t depth;
 
     if_err_return(rv, cap_trie_find(in->buf, in->len, &node, &depth));
@@ -3609,7 +3609,7 @@ static int extract_esc_cap(struct tb_event *event) {
 }
 
 static int extract_esc_mouse(struct tb_event *event) {
-    struct bytebuf_t *in = &global.in;
+    struct bytebuf *in = &global.in;
     size_t buf_shift = 0;
 
     // Bail if not enough to determine type
@@ -4083,7 +4083,7 @@ static int cell_free(struct tb_cell *cell) {
     return TB_OK;
 }
 
-static int cellbuf_init(struct cellbuf_t *c, int w, int h) {
+static int cellbuf_init(struct cellbuf *c, int w, int h) {
     c->cells = (struct tb_cell *)tb_malloc(sizeof(struct tb_cell) * w * h);
     if (!c->cells) return TB_ERR_MEM;
     memset(c->cells, 0, sizeof(struct tb_cell) * w * h);
@@ -4092,7 +4092,7 @@ static int cellbuf_init(struct cellbuf_t *c, int w, int h) {
     return TB_OK;
 }
 
-static int cellbuf_free(struct cellbuf_t *c) {
+static int cellbuf_free(struct cellbuf *c) {
     if (c->cells) {
         int i;
         for (i = 0; i < c->width * c->height; i++) {
@@ -4104,7 +4104,7 @@ static int cellbuf_free(struct cellbuf_t *c) {
     return TB_OK;
 }
 
-static int cellbuf_clear(struct cellbuf_t *c) {
+static int cellbuf_clear(struct cellbuf *c) {
     int rv, i;
     uint32_t space = (uint32_t)' ';
     for (i = 0; i < c->width * c->height; i++) {
@@ -4114,7 +4114,7 @@ static int cellbuf_clear(struct cellbuf_t *c) {
     return TB_OK;
 }
 
-static int cellbuf_get(struct cellbuf_t *c, int x, int y,
+static int cellbuf_get(struct cellbuf *c, int x, int y,
     struct tb_cell **out) {
     if (!cellbuf_in_bounds(c, x, y)) {
         *out = NULL;
@@ -4124,14 +4124,14 @@ static int cellbuf_get(struct cellbuf_t *c, int x, int y,
     return TB_OK;
 }
 
-static int cellbuf_in_bounds(struct cellbuf_t *c, int x, int y) {
+static int cellbuf_in_bounds(struct cellbuf *c, int x, int y) {
     if (x < 0 || x >= c->width || y < 0 || y >= c->height) {
         return 0;
     }
     return 1;
 }
 
-static int cellbuf_resize(struct cellbuf_t *c, int w, int h) {
+static int cellbuf_resize(struct cellbuf *c, int w, int h) {
     int rv;
 
     int ow = c->width;
@@ -4167,12 +4167,12 @@ static int cellbuf_resize(struct cellbuf_t *c, int w, int h) {
     return TB_OK;
 }
 
-static int bytebuf_puts(struct bytebuf_t *b, const char *str) {
+static int bytebuf_puts(struct bytebuf *b, const char *str) {
     if (!str || strlen(str) <= 0) return TB_OK; // Nothing to do for empty caps
     return bytebuf_nputs(b, str, (size_t)strlen(str));
 }
 
-static int bytebuf_nputs(struct bytebuf_t *b, const char *str, size_t nstr) {
+static int bytebuf_nputs(struct bytebuf *b, const char *str, size_t nstr) {
     int rv;
     if_err_return(rv, bytebuf_reserve(b, b->len + nstr + 1));
     memcpy(b->buf + b->len, str, nstr);
@@ -4181,7 +4181,7 @@ static int bytebuf_nputs(struct bytebuf_t *b, const char *str, size_t nstr) {
     return TB_OK;
 }
 
-static int bytebuf_shift(struct bytebuf_t *b, size_t n) {
+static int bytebuf_shift(struct bytebuf *b, size_t n) {
     if (n > b->len) n = b->len;
     size_t nmove = b->len - n;
     memmove(b->buf, b->buf + n, nmove);
@@ -4189,7 +4189,7 @@ static int bytebuf_shift(struct bytebuf_t *b, size_t n) {
     return TB_OK;
 }
 
-static int bytebuf_flush(struct bytebuf_t *b, int fd) {
+static int bytebuf_flush(struct bytebuf *b, int fd) {
     if (b->len <= 0) return TB_OK;
     ssize_t write_rv = write(fd, b->buf, b->len);
     if (write_rv < 0 || (size_t)write_rv != b->len) {
@@ -4201,7 +4201,7 @@ static int bytebuf_flush(struct bytebuf_t *b, int fd) {
     return TB_OK;
 }
 
-static int bytebuf_reserve(struct bytebuf_t *b, size_t sz) {
+static int bytebuf_reserve(struct bytebuf *b, size_t sz) {
     if (b->cap >= sz) return TB_OK;
 
     size_t newcap = b->cap > 0 ? b->cap : 1;
@@ -4222,7 +4222,7 @@ static int bytebuf_reserve(struct bytebuf_t *b, size_t sz) {
     return TB_OK;
 }
 
-static int bytebuf_free(struct bytebuf_t *b) {
+static int bytebuf_free(struct bytebuf *b) {
     if (b->buf) tb_free(b->buf);
     memset(b, 0, sizeof(*b));
     return TB_OK;
