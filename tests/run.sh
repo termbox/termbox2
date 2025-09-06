@@ -41,12 +41,12 @@ main() {
 
         # wait for Xvfb to come up
         echo -n '  starting Xvfb...'
-        local max_wait=30
+        local max_wait=300
         while ! test -e $xvfb_pipe; do
             echo -n .
             max_wait=$((max_wait-1))
             [ "$max_wait" -le 0 ] && break
-            sleep 1
+            sleep 0.1
         done
         echo
 
