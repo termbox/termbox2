@@ -169,7 +169,7 @@ extern "C" {
 #define tb_key_i(i)             0xffff - (i)
 /* Terminal-dependent key constants (`tb_event.key`) and terminfo caps */
 /* BEGIN codegen h */
-/* Produced by ./codegen.sh on Tue, 03 Sep 2024 04:17:47 +0000 */
+/* Produced by ./codegen.sh on Sun, 07 Sep 2025 16:37:22 +0000 */
 #define TB_KEY_F1               (0xffff - 0)
 #define TB_KEY_F2               (0xffff - 1)
 #define TB_KEY_F3               (0xffff - 2)
@@ -239,7 +239,8 @@ extern "C" {
 #define TB_CAP_EXIT_KEYPAD      35
 #define TB_CAP_DIM              36
 #define TB_CAP_INVISIBLE        37
-#define TB_CAP__COUNT           38
+#define TB_CAP_CLEAR_EOS        38
+#define TB_CAP__COUNT           39
 /* END codegen h */
 
 /* Some hard-coded caps */
@@ -248,6 +249,9 @@ extern "C" {
 #define TB_HARDCAP_STRIKEOUT    "\x1b[9m"
 #define TB_HARDCAP_UNDERLINE_2  "\x1b[21m"
 #define TB_HARDCAP_OVERLINE     "\x1b[53m"
+#define TB_HARDCAP_MOVE_REPORT  "\x1b\x37\x1b[9999;9999H\x1b[6n\x1b\x38"
+#define TB_HARDCAP_BOL_REPORT   "\r\x1b[6n"
+#define TB_HARDCAP_SCROLL_Y_FMT "\x1b[%dS\x1b[%d;%dH"
 
 /* Colors (numeric) and attributes (bitwise) (`tb_cell.fg`, `tb_cell.bg`) */
 #define TB_DEFAULT              0x0000
@@ -347,13 +351,16 @@ extern "C" {
 #define TB_ERR_TCSETATTR        -16
 #define TB_ERR_UNSUPPORTED_TERM -17
 #define TB_ERR_RESIZE_WRITE     -18
-#define TB_ERR_RESIZE_POLL      -19
-#define TB_ERR_RESIZE_READ      -20
-#define TB_ERR_RESIZE_SSCANF    -21
+#define TB_ERR_CURSOR_POLL      -19
+#define TB_ERR_CURSOR_READ      -20
+#define TB_ERR_CURSOR_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
 
 #define TB_ERR_SELECT           TB_ERR_POLL
 #define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
+#define TB_ERR_RESIZE_POLL      TB_ERR_CURSOR_POLL
+#define TB_ERR_RESIZE_READ      TB_ERR_CURSOR_READ
+#define TB_ERR_RESIZE_SSCANF    TB_ERR_CURSOR_SSCANF
 
 /* Deprecated. Function types to be used with `tb_set_func`. */
 #define TB_FUNC_EXTRACT_PRE     0
@@ -457,15 +464,41 @@ struct tb_event {
     int32_t y;    // mouse y
 };
 
-/* Initialize the termbox library. This function should be called before any
- * other functions. `tb_init` is equivalent to `tb_init_file("/dev/tty")`. After
- * successful initialization, the library must be finalized using `tb_shutdown`.
+/* Initialize the termbox library. This function must be called before any other
+ * functions (with the exception of utility functions and `tb_region`).
+ *
+ * `tb_init` is equivalent to `tb_init_file("/dev/tty")`.
+ *
+ * `tb_init_fd` and `tb_init_rwfd` allow the caller the initialize the library
+ * against arbitrary file descriptors.
+ *
+ * After successful initialization, the library must be finalized using
+ * `tb_shutdown`.
  */
 int tb_init(void);
 int tb_init_file(const char *path);
 int tb_init_fd(int ttyfd);
 int tb_init_rwfd(int rfd, int wfd);
 int tb_shutdown(void);
+
+/* Control region mode.
+ *
+ * In region mode, termbox will attempt to confine its rendering to a region of
+ * `h` rows. The terminal remains on the normal screen buffer instead of
+ * switching to the alternate screen buffer, which is the default behavior, and
+ * the screen isn't automatically cleared. All coordinates and dimensions passed
+ * into and returned from the library are relative to the region.
+ *
+ * For mouse events, absolute screen coords are stored in `tb_event.(w|h)`.
+ * Similarly, for resize events, absolute screen dimensions are stored in
+ * `tb_event.(x|y)`.
+ *
+ * Region mode cannot be toggled on or off after init. To enter region mode,
+ * callers must invoke this function before `tb_init*` with either `h>0` to
+ * enable or `h<=0` to disable. If already initialized and in region mode,
+ * callers may call the function again to change region height.
+ */
+int tb_region(int h);
 
 /* Return the size of the internal back buffer (which is the same as terminal's
  * window size in rows and columns). The internal buffer can be resized after
@@ -784,6 +817,15 @@ int tb_wcwidth(uint32_t ch);
         if ((rv) < 0 || (rv) >= (int)(sz)) return TB_ERR;                      \
     } while (0)
 
+#define write_or_return(rv, fd, buf, nbuf)                                     \
+    do {                                                                       \
+        (rv) = write((fd), (buf), (nbuf));                                     \
+        if ((rv) != (ssize_t)(nbuf)) { /* Note, errno==0 on partial write */   \
+            global.last_errno = errno;                                         \
+            return TB_ERR;                                                     \
+        }                                                                      \
+    } while (0)
+
 #define if_not_init_return()                                                   \
     if (!global.initialized) return TB_ERR_NOT_INIT
 
@@ -816,6 +858,10 @@ struct tb_global {
     int resize_pipefd[2];
     int width;
     int height;
+    int screen_w;
+    int screen_h;
+    int region_y;
+    int region_h;
     int cursor_x;
     int cursor_y;
     int last_x;
@@ -846,7 +892,7 @@ struct tb_global {
 static struct tb_global global = {0};
 
 /* BEGIN codegen c */
-/* Produced by ./codegen.sh on Tue, 03 Sep 2024 04:17:48 +0000 */
+/* Produced by ./codegen.sh on Sun, 07 Sep 2025 16:37:22 +0000 */
 
 static const int16_t terminfo_cap_indexes[] = {
     66,  // kf1 (TB_CAP_F1)
@@ -887,6 +933,7 @@ static const int16_t terminfo_cap_indexes[] = {
     88,  // rmkx (TB_CAP_EXIT_KEYPAD)
     30,  // dim (TB_CAP_DIM)
     32,  // invis (TB_CAP_INVISIBLE)
+    7,   // ed (TB_CAP_CLEAR_EOS)
 };
 
 // xterm
@@ -929,6 +976,7 @@ static const char *xterm_caps[] = {
     "\033[?1l\033>",           // rmkx (TB_CAP_EXIT_KEYPAD)
     "\033[2m",                 // dim (TB_CAP_DIM)
     "\033[8m",                 // invis (TB_CAP_INVISIBLE)
+    "\033[J",                  // ed (TB_CAP_CLEAR_EOS)
 };
 
 // linux
@@ -971,6 +1019,7 @@ static const char *linux_caps[] = {
     "",                  // rmkx (TB_CAP_EXIT_KEYPAD)
     "\033[2m",           // dim (TB_CAP_DIM)
     "",                  // invis (TB_CAP_INVISIBLE)
+    "\033[J",            // ed (TB_CAP_CLEAR_EOS)
 };
 
 // screen
@@ -1013,6 +1062,7 @@ static const char *screen_caps[] = {
     "\033[?1l\033>",     // rmkx (TB_CAP_EXIT_KEYPAD)
     "\033[2m",           // dim (TB_CAP_DIM)
     "",                  // invis (TB_CAP_INVISIBLE)
+    "\033[J",            // ed (TB_CAP_CLEAR_EOS)
 };
 
 // rxvt-256color
@@ -1055,6 +1105,7 @@ static const char *rxvt_256color_caps[] = {
     "\033>",                 // rmkx (TB_CAP_EXIT_KEYPAD)
     "",                      // dim (TB_CAP_DIM)
     "",                      // invis (TB_CAP_INVISIBLE)
+    "\033[J",                // ed (TB_CAP_CLEAR_EOS)
 };
 
 // rxvt-unicode
@@ -1097,6 +1148,7 @@ static const char *rxvt_unicode_caps[] = {
     "\033>",              // rmkx (TB_CAP_EXIT_KEYPAD)
     "",                   // dim (TB_CAP_DIM)
     "",                   // invis (TB_CAP_INVISIBLE)
+    "\033[J",             // ed (TB_CAP_CLEAR_EOS)
 };
 
 // Eterm
@@ -1139,6 +1191,7 @@ static const char *eterm_caps[] = {
     "",                      // rmkx (TB_CAP_EXIT_KEYPAD)
     "",                      // dim (TB_CAP_DIM)
     "",                      // invis (TB_CAP_INVISIBLE)
+    "\033[J",                // ed (TB_CAP_CLEAR_EOS)
 };
 
 static struct {
@@ -2271,8 +2324,6 @@ static struct {
 #endif // ifndef TB_OPT_LIBC_WCHAR
 
 static int tb_reset(void);
-static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
-    size_t *out_w, const char *fmt, va_list vl);
 static int init_term_attrs(void);
 static int init_term_caps(void);
 static int init_cap_trie(void);
@@ -2283,9 +2334,11 @@ static int cap_trie_deinit(struct cap_trie *node);
 static int init_resize_handler(void);
 static int send_init_escape_codes(void);
 static int send_clear(void);
+static int update_size(void);
 static int update_term_size(void);
 static int update_term_size_via_esc(void);
-static int init_cellbuf(void);
+static int read_cursor_response(int *x, int *y);
+static int update_region(void);
 static int tb_deinit(void);
 static int load_terminfo(void);
 static int load_terminfo_from_path(const char *path, const char *term);
@@ -2301,14 +2354,20 @@ static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
 static int extract_esc_cap(struct tb_event *event);
 static int extract_esc_mouse(struct tb_event *event);
-static int resize_cellbufs(void);
+static int resize_and_clear(void);
+static int init_cellbuf(void);
+static int resize_cellbuf(void);
 static void handle_resize(int sig);
+static int is_region_mode(void);
+static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
+    size_t *out_w, const char *fmt, va_list vl);
 static int send_attr(uintattr_t fg, uintattr_t bg);
 static int send_sgr(uint32_t fg, uint32_t bg, int fg_is_default,
     int bg_is_default);
 static int send_cursor_if(int x, int y);
 static int send_char(int x, int y, uint32_t ch);
 static int send_cluster(int x, int y, uint32_t *ch, size_t nch);
+static int send_cap(int cap);
 static int convert_num(uint32_t num, char *buf);
 static int cell_cmp(struct tb_cell *a, struct tb_cell *b);
 static int cell_copy(struct tb_cell *dst, struct tb_cell *src);
@@ -2328,8 +2387,8 @@ static int bytebuf_shift(struct bytebuf *b, size_t n);
 static int bytebuf_flush(struct bytebuf *b, int fd);
 static int bytebuf_reserve(struct bytebuf *b, size_t sz);
 static int bytebuf_free(struct bytebuf *b);
-static int tb_iswprint_ex(uint32_t ch, int *width);
 static int tb_wcswidth(uint32_t *ch, size_t nch);
+static int tb_iswprint_ex(uint32_t ch, int *w);
 
 int tb_init(void) {
     return tb_init_file("/dev/tty");
@@ -2351,28 +2410,36 @@ int tb_init_fd(int ttyfd) {
 }
 
 int tb_init_rwfd(int rfd, int wfd) {
-    int rv;
+    if (global.initialized) return TB_ERR_INIT_ALREADY;
 
     tb_reset();
     global.ttyfd = isatty(rfd) ? rfd : (isatty(wfd) ? wfd : -1);
     global.rfd = rfd;
     global.wfd = wfd;
 
+    int rv;
     do {
         if_err_break(rv, init_term_attrs());
         if_err_break(rv, init_term_caps());
         if_err_break(rv, init_cap_trie());
         if_err_break(rv, init_resize_handler());
         if_err_break(rv, send_init_escape_codes());
-        if_err_break(rv, send_clear());
-        if_err_break(rv, update_term_size());
-        if_err_break(rv, init_cellbuf());
+        if_err_break(rv, update_size());
         global.initialized = 1;
     } while (0);
 
     if (rv != TB_OK) tb_deinit();
 
     return rv;
+}
+
+int tb_region(int h) {
+    if (!global.initialized) {
+        global.region_h = h;
+    } else if (is_region_mode() && h > 0) {
+        global.region_h = h;
+    }
+    return TB_ERR;
 }
 
 int tb_shutdown(void) {
@@ -2429,7 +2496,7 @@ int tb_present(void) {
 #endif
                     w = tb_wcwidth((wchar_t)back->ch);
             }
-            if (w < 1) w = 1; // wcwidth qreturns -1 for invalid codepoints
+            if (w < 1) w = 1; // wcwidth returns -1 for invalid codepoints
 
             if (cell_cmp(back, front) != 0) {
                 cell_copy(front, back);
@@ -2477,10 +2544,8 @@ int tb_present(void) {
 }
 
 int tb_invalidate(void) {
-    int rv;
     if_not_init_return();
-    if_err_return(rv, resize_cellbufs());
-    return TB_OK;
+    return resize_and_clear();
 }
 
 int tb_set_cursor(int cx, int cy) {
@@ -2489,8 +2554,7 @@ int tb_set_cursor(int cx, int cy) {
     if (cx < 0) cx = 0;
     if (cy < 0) cy = 0;
     if (global.cursor_x == -1) {
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]));
+        if_err_return(rv, send_cap(TB_CAP_SHOW_CURSOR));
     }
     if_err_return(rv, send_cursor_if(cx, cy));
     global.cursor_x = cx;
@@ -2502,8 +2566,7 @@ int tb_hide_cursor(void) {
     if_not_init_return();
     int rv;
     if (global.cursor_x >= 0) {
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_HIDE_CURSOR]));
+        if_err_return(rv, send_cap(TB_CAP_HIDE_CURSOR));
     }
     global.cursor_x = -1;
     global.cursor_y = -1;
@@ -2704,6 +2767,7 @@ int tb_printf_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
 }
 
 int tb_send(const char *buf, size_t nbuf) {
+    if_not_init_return();
     return bytebuf_nputs(&global.out, buf, nbuf);
 }
 
@@ -2867,6 +2931,7 @@ const char *tb_version(void) {
 
 static int tb_reset(void) {
     int ttyfd_open = global.ttyfd_open;
+    int region_h = global.region_h;
     memset(&global, 0, sizeof(global));
     global.ttyfd = -1;
     global.rfd = -1;
@@ -2886,6 +2951,7 @@ static int tb_reset(void) {
     global.last_bg = ~global.bg;
     global.input_mode = TB_INPUT_ESC;
     global.output_mode = TB_OUTPUT_NORMAL;
+    global.region_h = region_h;
     return TB_OK;
 }
 
@@ -2911,17 +2977,6 @@ static int init_term_attrs(void) {
     }
 
     return TB_OK;
-}
-
-int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
-    const char *fmt, va_list vl) {
-    int rv;
-    char buf[TB_OPT_PRINTF_BUF];
-    rv = vsnprintf(buf, sizeof(buf), fmt, vl);
-    if (rv < 0 || rv >= (int)sizeof(buf)) {
-        return TB_ERR;
-    }
-    return tb_print_ex(x, y, fg, bg, out_w, buf);
 }
 
 static int init_term_caps(void) {
@@ -3065,21 +3120,22 @@ static int init_resize_handler(void) {
 
 static int send_init_escape_codes(void) {
     int rv;
-    if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_ENTER_CA]));
-    if_err_return(rv,
-        bytebuf_puts(&global.out, global.caps[TB_CAP_ENTER_KEYPAD]));
-    if_err_return(rv,
-        bytebuf_puts(&global.out, global.caps[TB_CAP_HIDE_CURSOR]));
+    if (!is_region_mode()) {
+        if_err_return(rv, send_cap(TB_CAP_ENTER_CA));
+    }
+    if_err_return(rv, send_cap(TB_CAP_ENTER_KEYPAD));
+    if_err_return(rv, send_cap(TB_CAP_HIDE_CURSOR));
     return TB_OK;
 }
 
 static int send_clear(void) {
     int rv;
 
+    if (is_region_mode()) if_err_return(rv, send_cursor_if(0, 0));
+
     if_err_return(rv, send_attr(global.fg, global.bg));
     if_err_return(rv,
-        bytebuf_puts(&global.out, global.caps[TB_CAP_CLEAR_SCREEN]));
-
+        send_cap(is_region_mode() ? TB_CAP_CLEAR_EOS : TB_CAP_CLEAR_SCREEN));
     if_err_return(rv, send_cursor_if(global.cursor_x, global.cursor_y));
     if_err_return(rv, bytebuf_flush(&global.out, global.wfd));
 
@@ -3089,18 +3145,26 @@ static int send_clear(void) {
     return TB_OK;
 }
 
+static int update_size(void) {
+    int rv;
+    if (global.ttyfd < 0) return TB_OK;
+    if_err_return(rv, update_term_size());
+    if (is_region_mode()) if_err_return(rv, update_region());
+    global.width = global.screen_w;
+    global.height = is_region_mode() ? global.region_h : global.screen_h;
+    if_err_return(rv, resize_and_clear());
+    return TB_OK;
+}
+
 static int update_term_size(void) {
     int rv, ioctl_errno;
 
-    if (global.ttyfd < 0) return TB_OK;
-
+    // Try ioctl TIOCGWINSZ
     struct winsize sz;
     memset(&sz, 0, sizeof(sz));
-
-    // Try ioctl TIOCGWINSZ
     if (ioctl(global.ttyfd, TIOCGWINSZ, &sz) == 0) {
-        global.width = sz.ws_col;
-        global.height = sz.ws_row;
+        global.screen_w = sz.ws_col;
+        global.screen_h = sz.ws_row;
         return TB_OK;
     }
     ioctl_errno = errno;
@@ -3113,66 +3177,104 @@ static int update_term_size(void) {
 }
 
 static int update_term_size_via_esc(void) {
-#ifndef TB_RESIZE_FALLBACK_MS
-#define TB_RESIZE_FALLBACK_MS 1000
+    // Save cursor, move, report, restore cursor
+    int rv;
+    ssize_t write_rv;
+    char *move_report = TB_HARDCAP_MOVE_REPORT;
+    write_or_return(write_rv, global.wfd, move_report, strlen(move_report));
+
+    int rx, ry;
+    if_err_return(rv, read_cursor_response(&rx, &ry));
+    global.screen_w = rx + 1;
+    global.screen_h = ry + 1;
+
+    return TB_OK;
+}
+
+static int read_cursor_response(int *x, int *y) {
+#if defined(TB_READ_CURSOR_TIMEOUT_MS)
+#elif defined(TB_RESIZE_FALLBACK_MS)
+#define TB_READ_CURSOR_TIMEOUT_MS TB_RESIZE_FALLBACK_MS
+#else
+#define TB_READ_CURSOR_TIMEOUT_MS 1000
 #endif
-
-    char move_and_report[] = "\x1b[9999;9999H\x1b[6n";
-    ssize_t write_rv =
-        write(global.wfd, move_and_report, strlen(move_and_report));
-    if (write_rv != (ssize_t)strlen(move_and_report)) {
-        return TB_ERR_RESIZE_WRITE;
-    }
-
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(global.rfd, &fds);
 
     struct timeval timeout;
     timeout.tv_sec = 0;
-    timeout.tv_usec = TB_RESIZE_FALLBACK_MS * 1000;
+    timeout.tv_usec = TB_READ_CURSOR_TIMEOUT_MS * 1000;
 
     int select_rv = select(global.rfd + 1, &fds, NULL, NULL, &timeout);
-
     if (select_rv != 1) {
         global.last_errno = errno;
-        return TB_ERR_RESIZE_POLL;
+        return TB_ERR_CURSOR_POLL;
     }
 
     char buf[TB_OPT_READ_BUF];
     ssize_t read_rv = read(global.rfd, buf, sizeof(buf) - 1);
     if (read_rv < 1) {
         global.last_errno = errno;
-        return TB_ERR_RESIZE_READ;
+        return TB_ERR_CURSOR_READ;
     }
     buf[read_rv] = '\0';
 
-    int rw, rh;
-    if (sscanf(buf, "\x1b[%d;%dR", &rh, &rw) != 2) {
-        return TB_ERR_RESIZE_SSCANF;
+    if (sscanf(buf, "\x1b[%d;%dR", y, x) != 2) { // TODO: HARDCAP
+        return TB_ERR_CURSOR_SSCANF;
     }
 
-    global.width = rw;
-    global.height = rh;
+    *x = *x > 0 ? *x - 1 : 0; // Make zero-indexed
+    *y = *y > 0 ? *y - 1 : 0;
+
     return TB_OK;
 }
 
-static int init_cellbuf(void) {
-    int rv;
-    if_err_return(rv, cellbuf_init(&global.back, global.width, global.height));
-    if_err_return(rv, cellbuf_init(&global.front, global.width, global.height));
-    if_err_return(rv, cellbuf_clear(&global.back));
-    if_err_return(rv, cellbuf_clear(&global.front));
+static int update_region(void) {
+    // Move to origin if we're initialized
+    if (global.initialized) {
+        send_cursor_if(0, 0);
+        bytebuf_flush(&global.out, global.wfd);
+    }
+
+    // Read back cursor pos as new origin
+    int rv, region_x;
+    ssize_t write_rv;
+    char *bol_report = TB_HARDCAP_BOL_REPORT;
+    write_or_return(write_rv, global.wfd, bol_report, strlen(bol_report));
+    if_err_return(rv, read_cursor_response(&region_x, &global.region_y));
+
+    int available_h = global.screen_h - global.region_y;
+    if (available_h <= 0) available_h = 1; // should not happen
+
+    // If we have enough space, we're done, otherwise we need to scroll
+    if (global.region_h <= available_h) return TB_OK;
+    if (global.region_h > global.screen_h) global.region_h = global.screen_h;
+    int padding_h = global.region_h - available_h;
+
+    // Scroll and move up
+    char scroll[16];
+    global.region_y -= padding_h;
+    if (global.region_y < 0) global.region_y = 0; // should not happen
+    snprintf_or_return(rv, scroll, sizeof(scroll), TB_HARDCAP_SCROLL_Y_FMT,
+        padding_h, global.region_y + 1, 1);
+    write_or_return(write_rv, global.wfd, scroll, strlen(scroll));
+
     return TB_OK;
 }
 
 static int tb_deinit(void) {
     if (global.caps[0] != NULL && global.wfd >= 0) {
-        bytebuf_puts(&global.out, global.caps[TB_CAP_SHOW_CURSOR]);
-        bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]);
-        bytebuf_puts(&global.out, global.caps[TB_CAP_CLEAR_SCREEN]);
-        bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_CA]);
-        bytebuf_puts(&global.out, global.caps[TB_CAP_EXIT_KEYPAD]);
+        send_cap(TB_CAP_SHOW_CURSOR);
+        send_cap(TB_CAP_SGR0);
+        if (is_region_mode()) {
+            send_cursor_if(0, tb_height() - 1);
+            bytebuf_puts(&global.out, "\r\n");
+        } else {
+            send_cap(TB_CAP_CLEAR_SCREEN);
+            send_cap(TB_CAP_EXIT_CA);
+        }
+        send_cap(TB_CAP_EXIT_KEYPAD);
         bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
         bytebuf_flush(&global.out, global.wfd);
     }
@@ -3448,6 +3550,11 @@ static int wait_event(struct tb_event *event, int timeout) {
     memset(event, 0, sizeof(*event));
     if_ok_return(rv, extract_event(event));
 
+    if (is_region_mode() && global.height != global.region_h) {
+        // Emit a resize event if the user requested a region change
+        goto wait_event_resize;
+    }
+
     fd_set fds;
     struct timeval tv;
     tv.tv_sec = timeout / 1000;
@@ -3489,12 +3596,13 @@ static int wait_event(struct tb_event *event, int timeout) {
         if (resize_has_events) {
             int ignore = 0;
             read(global.resize_pipefd[0], &ignore, sizeof(ignore));
+        wait_event_resize:
             // TODO: Harden against errors encountered mid-resize
-            if_err_return(rv, update_term_size());
-            if_err_return(rv, resize_cellbufs());
+            if_err_return(rv, update_size());
             event->type = TB_EVENT_RESIZE;
             event->w = global.width;
             event->h = global.height;
+            if (is_region_mode()) event->y = global.screen_h;
             return TB_OK;
         }
 
@@ -3754,17 +3862,40 @@ static int extract_esc_mouse(struct tb_event *event) {
 
     event->type = TB_EVENT_MOUSE;
 
+    if (is_region_mode()) {
+        // Adjust y coord in region mode. Allow negative values.
+        // Store absolute coord in `h`.
+        event->h = event->y;
+        event->y -= global.region_y;
+    }
+
     return TB_OK;
 }
 
-static int resize_cellbufs(void) {
+static int resize_and_clear(void) {
     int rv;
+    if_err_return(rv, resize_cellbuf());
+    if_err_return(rv, send_clear());
+    return TB_OK;
+}
+
+static int init_cellbuf(void) {
+    int rv;
+    if_err_return(rv, cellbuf_init(&global.back, global.width, global.height));
+    if_err_return(rv, cellbuf_init(&global.front, global.width, global.height));
+    if_err_return(rv, cellbuf_clear(&global.back));
+    if_err_return(rv, cellbuf_clear(&global.front));
+    return TB_OK;
+}
+
+static int resize_cellbuf(void) {
+    int rv;
+    if (!global.back.cells) return init_cellbuf();
     if_err_return(rv,
         cellbuf_resize(&global.back, global.width, global.height));
     if_err_return(rv,
         cellbuf_resize(&global.front, global.width, global.height));
     if_err_return(rv, cellbuf_clear(&global.front));
-    if_err_return(rv, send_clear());
     return TB_OK;
 }
 
@@ -3774,6 +3905,21 @@ static void handle_resize(int sig) {
     errno = errno_copy;
 }
 
+static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
+    size_t *out_w, const char *fmt, va_list vl) {
+    int rv;
+    char buf[TB_OPT_PRINTF_BUF];
+    rv = vsnprintf(buf, sizeof(buf), fmt, vl);
+    if (rv < 0 || rv >= (int)sizeof(buf)) {
+        return TB_ERR;
+    }
+    return tb_print_ex(x, y, fg, bg, out_w, buf);
+}
+
+static int is_region_mode(void) {
+    return global.region_h > 0 ? 1 : 0;
+}
+
 static int send_attr(uintattr_t fg, uintattr_t bg) {
     int rv;
 
@@ -3781,7 +3927,7 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         return TB_OK;
     }
 
-    if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]));
+    if_err_return(rv, send_cap(TB_CAP_SGR0));
 
     uint32_t cfg, cbg;
     switch (global.output_mode) {
@@ -3830,22 +3976,15 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
 #endif
     }
 
-    if (fg & TB_BOLD)
-        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
+    if (fg & TB_BOLD) if_err_return(rv, send_cap(TB_CAP_BOLD));
 
-    if (fg & TB_BLINK)
-        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
+    if (fg & TB_BLINK) if_err_return(rv, send_cap(TB_CAP_BLINK));
 
-    if (fg & TB_UNDERLINE)
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_UNDERLINE]));
+    if (fg & TB_UNDERLINE) if_err_return(rv, send_cap(TB_CAP_UNDERLINE));
 
-    if (fg & TB_ITALIC)
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_ITALIC]));
+    if (fg & TB_ITALIC) if_err_return(rv, send_cap(TB_CAP_ITALIC));
 
-    if (fg & TB_DIM)
-        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_DIM]));
+    if (fg & TB_DIM) if_err_return(rv, send_cap(TB_CAP_DIM));
 
 #if TB_OPT_ATTR_W == 64
     if (fg & TB_STRIKEOUT)
@@ -3857,14 +3996,11 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
     if (fg & TB_OVERLINE)
         if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_OVERLINE));
 
-    if (fg & TB_INVISIBLE)
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_INVISIBLE]));
+    if (fg & TB_INVISIBLE) if_err_return(rv, send_cap(TB_CAP_INVISIBLE));
 #endif
 
     if ((fg & TB_REVERSE) || (bg & TB_REVERSE))
-        if_err_return(rv,
-            bytebuf_puts(&global.out, global.caps[TB_CAP_REVERSE]));
+        if_err_return(rv, send_cap(TB_CAP_REVERSE));
 
     int fg_is_default = (fg & 0xff) == 0;
     int bg_is_default = (bg & 0xff) == 0;
@@ -3960,13 +4096,12 @@ static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
 }
 
 static int send_cursor_if(int x, int y) {
-    int rv;
+    int rv, offset_y;
     char nbuf[32];
-    if (x < 0 || y < 0) {
-        return TB_OK;
-    }
+    if (x < 0 || y < 0) return TB_OK; // TODO: TB_ERR? Is this expected?
+    offset_y = is_region_mode() ? global.region_y : 0;
     send_literal(rv, "\x1b[");
-    send_num(rv, nbuf, y + 1);
+    send_num(rv, nbuf, y + 1 + offset_y);
     send_literal(rv, ";");
     send_num(rv, nbuf, x + 1);
     send_literal(rv, "H");
@@ -3998,6 +4133,10 @@ static int send_cluster(int x, int y, uint32_t *ch, size_t nch) {
     }
 
     return TB_OK;
+}
+
+static int send_cap(int cap) {
+    return bytebuf_puts(&global.out, global.caps[cap]);
 }
 
 static int convert_num(uint32_t num, char *buf) {
@@ -4114,8 +4253,7 @@ static int cellbuf_clear(struct cellbuf *c) {
     return TB_OK;
 }
 
-static int cellbuf_get(struct cellbuf *c, int x, int y,
-    struct tb_cell **out) {
+static int cellbuf_get(struct cellbuf *c, int x, int y, struct tb_cell **out) {
     if (!cellbuf_in_bounds(c, x, y)) {
         *out = NULL;
         return TB_ERR_OUT_OF_BOUNDS;
@@ -4191,12 +4329,8 @@ static int bytebuf_shift(struct bytebuf *b, size_t n) {
 
 static int bytebuf_flush(struct bytebuf *b, int fd) {
     if (b->len <= 0) return TB_OK;
-    ssize_t write_rv = write(fd, b->buf, b->len);
-    if (write_rv < 0 || (size_t)write_rv != b->len) {
-        // Note, errno will be 0 on partial write
-        global.last_errno = errno;
-        return TB_ERR;
-    }
+    ssize_t write_rv;
+    write_or_return(write_rv, fd, b->buf, b->len);
     b->len = 0;
     return TB_OK;
 }
