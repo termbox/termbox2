@@ -22,7 +22,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-
 #ifndef TERMBOX_H_INCL
 #define TERMBOX_H_INCL
 
@@ -50,8 +49,6 @@ SOFTWARE.
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
-#include <wchar.h>
-#include <wctype.h>
 
 #ifdef PATH_MAX
 #define TB_PATH_MAX PATH_MAX
@@ -117,6 +114,12 @@ extern "C" {
 #else
 #define TB_OPT_ATTR_W 16
 #endif
+#endif
+
+/* Include wchar if opting libc */
+#ifdef TB_OPT_LIBC_WCHAR
+#include <wchar.h>
+#include <wctype.h>
 #endif
 
 /* ASCII key constants (`tb_event.key`) */
@@ -4265,14 +4268,16 @@ static int tb_iswprint_ex(uint32_t ch, int *w) {
     if (w) *w = wcwidth((wint_t)ch);
     return iswprint(ch);
 #else
-    int lo = 0, hi = WCWIDTH_TABLE_LENGTH - 1;
-    if (ch >= 0x20 && ch <= 0x7e) { // fast path for ASCII
+    // Fast path for 1-byte codepoints
+    if ((ch >= 0x20 && ch <= 0x7e) || (ch >= 0xa0 && ch <= 0xff)) {
         if (w) *w = 1;
         return 1;
-    } else if (ch == 0) { // Special case for null, which is not represented in
-        if (w) *w = 0;    // wcwidth_table since it's the only codepoint that is
-        return 0;         // iswprint==0 but not wcwidth==-1. (It's wcwidth==0.)
+    } else if (ch <= 0xff) {
+        if (w) *w = ch == 0 ? 0 : -1;
+        return 0;
     }
+
+    int lo = 0, hi = WCWIDTH_TABLE_LENGTH - 1;
     while (lo <= hi) {
         int i = (lo + hi) / 2;
         if (ch < wcwidth_table[i].range_start) {
@@ -4284,7 +4289,7 @@ static int tb_iswprint_ex(uint32_t ch, int *w) {
             return wcwidth_table[i].width >= 0 ? 1 : 0;
         }
     }
-    if (w) *w = -1; // invalid codepoint
+    if (w) *w = -1; // Invalid codepoint
     return 0;
 #endif
 }
