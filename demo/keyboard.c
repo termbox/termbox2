@@ -339,7 +339,8 @@ struct combo func_combos[] = {
     {{K_ARROW_UP,0}},
     {{K_ARROW_DOWN,0}},
     {{K_ARROW_LEFT,0}},
-    {{K_ARROW_RIGHT,0}}
+    {{K_ARROW_RIGHT,0}},
+    {{K_TAB,K_LSHIFT,K_RSHIFT,0}}
 };
 
 void print_tb(const char *str, int x, int y, uint16_t fg, uint16_t bg)
@@ -586,12 +587,13 @@ const char *funckeymap(int k)
         "ARROW UP",
         "ARROW DOWN",
         "ARROW LEFT",
-        "ARROW RIGHT"
+        "ARROW RIGHT",
+        "SHIFT+TAB"
     };
 
     if (k == TB_KEY_CTRL_8)
         return "CTRL+8, BACKSPACE 2"; /* 0x7F */
-    else if (k >= TB_KEY_ARROW_RIGHT && k <= 0xFFFF)
+    else if (k >= TB_KEY_BACK_TAB && k <= 0xFFFF)
         return fkmap[0xFFFF-k];
     else if (k <= TB_KEY_SPACE)
         return fcmap[k];
@@ -672,7 +674,7 @@ void dispatch_press(struct tb_event *ev)
     }
 
     struct combo *k = 0;
-    if (ev->key >= TB_KEY_ARROW_RIGHT)
+    if (ev->key >= TB_KEY_BACK_TAB)
         k = &func_combos[0xFFFF-ev->key];
     else if (ev->ch < 128) {
         if (ev->ch == 0 && ev->key < 128)
