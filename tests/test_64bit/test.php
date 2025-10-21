@@ -10,9 +10,12 @@ $test->ffi->tb_init();
 
 $attrs = [
     'TB_STRIKEOUT',
-    // 'TB_OVERLINE', // Not supported by xterm
+    // 'TB_OVERLINE',         // Not supported by xterm
     'TB_INVISIBLE',
     'TB_UNDERLINE_2',
+    // 'TB_CURLY_UNDERLINE',  // Not supported by xterm
+    // 'TB_DOTTED_UNDERLINE', // Not supported by xterm
+    // 'TB_DASHED_UNDERLINE'  // Not supported by xterm
 ];
 
 $y = 0;
