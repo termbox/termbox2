@@ -52,6 +52,7 @@ read -r -d '' terminfo_funcs <<'EOD'
     rmkx  EXIT_KEYPAD
     dim   DIM
     invis INVISIBLE
+    ed    CLEAR_EOS
 EOD
 
 read -r -d '' extra_keys <<'EOD'
