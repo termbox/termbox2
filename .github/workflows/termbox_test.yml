@@ -1,9 +1,20 @@
 name: termbox_test
 on: [push, pull_request]
 jobs:
-  termbox_test_job:
+  posix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - run:                        make clean test
       - run: CFLAGS='-UTB_LIB_OPTS' make clean test # non-egc, non-truecolor
+  win32:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: ilammy/msvc-dev-cmd@v1
+      - shell: bash
+        run: ./windows.sh && cp -vf termbox2_win.h termbox2.h
+      - shell: cmd
+        run: |
+          cl /c /I. /DTB_IMPL               demo/keyboard.c
+          cl /c /I. /DTB_IMPL /DTB_LIB_OPTS demo/keyboard.c
