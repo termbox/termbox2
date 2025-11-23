@@ -409,18 +409,18 @@ typedef uint16_t uintattr_t;
  * `nech`, and `cech` via `tb_set_cell_ex`. `ech` is only valid when `nech>0`,
  * otherwise `ch` is used.
  *
- * For non-single-width codepoints, given `N=wcwidth(ch)/wcswidth(ech)`:
+ * For non-single-width codepoints, given `W=wcwidth(ch || ech)`:
  *
- * when `N==0`: termbox forces a single-width cell. Callers should avoid this
+ * when `W<=0`: termbox forces a single-width cell. Callers should avoid this
  *              if aiming to render text accurately. Callers may use
- *              `tb_set_cell_ex` or `tb_print*` to render `N==0` combining
+ *              `tb_set_cell_ex` or `tb_print*` to render `W==0` combining
  *              characters.
  *
- *  when `N>1`: termbox zeroes out the following `N-1` cells and skips sending
- *              them to the tty. So, e.g., if the caller sets `x=0,y=0` to an
- *              `N==2` codepoint, the caller's next set should be at `x=2,y=0`.
+ * when `W>=2`: termbox zeroes out the following `W-1` cells and skips sending
+ *              them to the tty. So, e.g., if the caller sets `x=0,y=0` to a
+ *              `W==2` codepoint, the caller's next set should be at `x=2,y=0`.
  *              Anything set at `x=1,y=0` will be ignored. If there are not
- *              enough columns remaining on the line to render `N` width, spaces
+ *              enough columns remaining on the line to render `W` cells, spaces
  *              are sent instead.
  *
  * See `tb_present` for implementation.
@@ -2332,7 +2332,7 @@ static int bytebuf_flush(struct bytebuf *b, int fd);
 static int bytebuf_reserve(struct bytebuf *b, size_t sz);
 static int bytebuf_free(struct bytebuf *b);
 static int tb_iswprint_ex(uint32_t ch, int *width);
-static int tb_wcswidth(uint32_t *ch, size_t nch);
+static int tb_cluster_width(uint32_t *ch, size_t nch);
 
 int tb_init(void) {
     return tb_init_file("/dev/tty");
@@ -2427,12 +2427,12 @@ int tb_present(void) {
             {
 #ifdef TB_OPT_EGC
                 if (back->nech > 0)
-                    w = tb_wcswidth(back->ech, back->nech);
+                    w = tb_cluster_width(back->ech, back->nech);
                 else
 #endif
                     w = tb_wcwidth((wchar_t)back->ch);
             }
-            if (w < 1) w = 1; // wcwidth qreturns -1 for invalid codepoints
+            if (w < 1) w = 1; // wcwidth returns -1 for invalid codepoints
 
             if (cell_cmp(back, front) != 0) {
                 cell_copy(front, back);
@@ -4240,27 +4240,35 @@ int tb_iswprint(uint32_t ch) {
 }
 
 int tb_wcwidth(uint32_t ch) {
+    int w;
 #ifdef TB_OPT_LIBC_WCHAR
-    return wcwidth((wchar_t)ch);
+    w = wcwidth((wchar_t)ch);
 #else
-    return tb_wcswidth(&ch, 1);
+    tb_iswprint_ex(ch, &w);
 #endif
+    return w;
 }
 
-static int tb_wcswidth(uint32_t *ch, size_t nch) {
-#ifdef TB_OPT_LIBC_WCHAR
-    return wcswidth((wchar_t *)ch, nch);
-#else
-    int sw = 0;
+static int tb_cluster_width(uint32_t *ch, size_t nch) {
+    int wmax = -1;
+    int vs15 = 0, vs16 = 0, ri = 0, zwj = 0;
     size_t i = 0;
     for (i = 0; i < nch; i++) {
-        int w;
-        tb_iswprint_ex(ch[i], &w);
-        if (w < 0) return -1;
-        sw += w;
+        uint32_t c = ch[i];
+        switch (c) {
+            case 0xfe0e: ++vs15; break;
+            case 0xfe0f: ++vs16; break;
+            case 0x200d: ++zwj; break;
+            default: if (c >= 0x1f1e6 && c <= 0x1f1ff) ++ri;
+        }
+        int w = tb_wcwidth(c);
+        if (w > wmax) wmax = w;
     }
-    return sw;
-#endif
+    if (wmax >= 1) {
+        if (vs15) return 1;
+        else if (vs16 || zwj || ri >= 2) return 2;
+    }
+    return wmax;
 }
 
 static int tb_iswprint_ex(uint32_t ch, int *w) {
