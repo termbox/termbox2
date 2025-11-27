@@ -144,5 +144,6 @@ there is at least one layout engine with termbox2 support:
 * [xtxf](https://github.com/charlesrocket/xtxf) - 2D matrix screensaver
 * [chatty](https://git.spacehb.net/chatty) - chat application
 * [ly](https://codeberg.org/fairyglade/ly) - TUI display manager for Linux and BSD
+* [kew](https://codeberg.org/ravachol/kew) - terminal music player
 
 [^1]: See https://github.com/termbox/termbox2/pull/75#issuecomment-2252242269
