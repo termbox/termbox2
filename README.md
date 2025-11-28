@@ -130,6 +130,11 @@ termbox2 also does not contain a layout engine for the same reason. However,
 there is at least one layout engine with termbox2 support:
 [Clay](https://github.com/nicbarker/clay).
 
+### Windows support
+
+termbox2 has experimental support for Windows. Run `./windows.sh` to generate
+`termbox2_win.h` which is a drop-in replacement for `termbox2.h`.
+
 ### Examples
 
 * [mle](https://github.com/adsr/mle) - flexible terminal-based text editor

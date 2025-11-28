@@ -43,6 +43,8 @@ SOFTWARE.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
+// __posix_header_start
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/stat.h>
@@ -50,8 +52,8 @@ SOFTWARE.
 #include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
-#include <wchar.h>
 #include <wctype.h>
+// __posix_header_end
 
 #ifdef PATH_MAX
 #define TB_PATH_MAX PATH_MAX
@@ -2354,9 +2356,12 @@ int tb_init_rwfd(int rfd, int wfd) {
     int rv;
 
     tb_reset();
+
+    // __posix_start
     global.ttyfd = isatty(rfd) ? rfd : (isatty(wfd) ? wfd : -1);
     global.rfd = rfd;
     global.wfd = wfd;
+    // __posix_end
 
     do {
         if_err_break(rv, init_term_attrs());
@@ -2836,7 +2841,9 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_POLL:
         case TB_ERR_RESIZE_READ:
         default:
+            // __posix_start
             strerror_r(global.last_errno, global.errbuf, sizeof(global.errbuf));
+            // __posix_end
             return (const char *)global.errbuf;
     }
 }
@@ -3176,6 +3183,8 @@ static int tb_deinit(void) {
         bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
         bytebuf_flush(&global.out, global.wfd);
     }
+
+    // __posix_start
     if (global.ttyfd >= 0) {
         if (global.has_orig_tios) {
             tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
@@ -3192,6 +3201,7 @@ static int tb_deinit(void) {
     sigaction(SIGWINCH, &sa, NULL);
     if (global.resize_pipefd[0] >= 0) close(global.resize_pipefd[0]);
     if (global.resize_pipefd[1] >= 0) close(global.resize_pipefd[1]);
+    // __posix_end
 
     cellbuf_free(&global.back);
     cellbuf_free(&global.front);
@@ -4191,12 +4201,16 @@ static int bytebuf_shift(struct bytebuf *b, size_t n) {
 
 static int bytebuf_flush(struct bytebuf *b, int fd) {
     if (b->len <= 0) return TB_OK;
+
+    // __posix_start
     ssize_t write_rv = write(fd, b->buf, b->len);
     if (write_rv < 0 || (size_t)write_rv != b->len) {
         // Note, errno will be 0 on partial write
         global.last_errno = errno;
         return TB_ERR;
     }
+    // __posix_end
+
     b->len = 0;
     return TB_OK;
 }
