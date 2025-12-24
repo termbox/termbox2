@@ -699,7 +699,11 @@ int main(int argc, char **argv)
 
     setlocale(LC_ALL, "");
 
-    ret = tb_init();
+    if (argc >= 2 && atoi(argv[1]) > 0) {
+        ret = tb_init_ex(1, TB_INIT_REGION, 24);
+    } else {
+        ret = tb_init();
+    }
     if (ret) {
         fprintf(stderr, "tb_init() failed with error code %d\n", ret);
         return 1;
