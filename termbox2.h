@@ -296,6 +296,9 @@ extern "C" {
 #define TB_UNDERLINE_2 0x0000000200000000
 #define TB_OVERLINE    0x0000000400000000
 #define TB_INVISIBLE   0x0000000800000000
+#define TB_UATTR       0x8000000000000000 // See `tb_set_uattr_func`
+#define TB_UATTR_START 0x0000000100000000
+#define TB_UATTR_MASK  0xffffffff00000000
 #endif
 
 /* Event types (`tb_event.type`) */
@@ -575,7 +578,8 @@ int tb_set_input_mode(int mode);
  *
  *    The following style attributes are also available if compiled with
  *    `TB_OPT_ATTR_W` set to 64:
- *      `TB_STRIKEOUT`, `TB_UNDERLINE_2`, `TB_OVERLINE`, `TB_INVISIBLE`
+ *      `TB_STRIKEOUT`, `TB_UNDERLINE_2`, `TB_OVERLINE`, `TB_INVISIBLE`,
+ *      `TB_UATTR`
  *
  *    As in all modes, the value 0 is interpreted as `TB_DEFAULT` for
  *    convenience.
@@ -706,6 +710,32 @@ int tb_sendf(const char *fmt, ...);
  *   extract any escape sequences from the input buffer.
  */
 int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *));
+
+/**
+ * Set `TB_UATTR` callback.
+ *
+ * If a cell's `fg` or `bg` style attribute has the `TB_UATTR` bit set, termbox
+ * will ignore all the attributes set in the upper 32 bits of `fg` and `bg`
+ * (above and including `TB_STRIKEOUT`) and instead invoke the specified
+ * callback to get the escape codes to emit for cell. This allows for 31 bits of
+ * user-defined style attributes (minus 1 bit for `TB_UATTR` itself) for both
+ * `fg` and `bg`.
+ *
+ * For convenience, `TB_UATTR` may be combined with other attributes that occupy
+ * the lower 32 such as `TB_BOLD` and colors for each of the output modes.
+ *
+ * The callback should set `out` to a string of escape codes according to `fg`
+ * and `bg`, set `out_len` to the length of this string, and return `TB_OK`. Any
+ * other return value will cause future `tb_present` calls to error. The
+ * callback should be deterministic. That is, it should return the same output
+ * given the same input. Pass NULL to disable the callback, which causes
+ * `TB_UATTR` to have no effect.
+ *
+ * Note this functionality only works when termbox is compiled with 64-bit style
+ * attributes (`TB_OPT_ATTR_W == 64`).
+ */
+int tb_set_uattr_func(int (*fn)(uintattr_t fg, uintattr_t bg, char **out,
+    size_t *out_len));
 
 /* Return byte length of codepoint given first byte of UTF-8 sequence (1-6). */
 int tb_utf8_char_length(char c);
@@ -841,6 +871,7 @@ struct tb_global {
     int has_orig_tios;
     int last_errno;
     int initialized;
+    int (*fn_uattr)(uintattr_t fg, uintattr_t bg, char **out, size_t *out_len);
     int (*fn_extract_esc_pre)(struct tb_event *, size_t *);
     int (*fn_extract_esc_post)(struct tb_event *, size_t *);
     char errbuf[1024];
@@ -2735,6 +2766,12 @@ int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *)) {
     return TB_ERR;
 }
 
+int tb_set_uattr_func(int (*fn)(uintattr_t fg, uintattr_t bg, char **out,
+    size_t *out_len)) {
+    global.fn_uattr = fn;
+    return TB_OK;
+}
+
 struct tb_cell *tb_cell_buffer(void) {
     if (!global.initialized) return NULL;
     return global.back.cells;
@@ -3777,14 +3814,29 @@ static void handle_resize(int sig) {
     errno = errno_copy;
 }
 
-static int send_attr(uintattr_t fg, uintattr_t bg) {
+static int send_attr(uintattr_t ofg, uintattr_t obg) {
     int rv;
+
+    uintattr_t fg = ofg;
+    uintattr_t bg = obg;
 
     if (fg == global.last_fg && bg == global.last_bg) {
         return TB_OK;
     }
 
     if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]));
+
+#if TB_OPT_ATTR_W == 64
+    if (global.fn_uattr && ((fg & TB_UATTR) || (bg & TB_UATTR))) {
+        // Apply uattr
+        char *uattr = NULL;
+        size_t nuattr = 0;
+        if_err_return(rv, (global.fn_uattr)(fg, bg, &uattr, &nuattr));
+        if_err_return(rv, bytebuf_nputs(&global.out, uattr, nuattr));
+        fg &= ~TB_UATTR_MASK;
+        bg &= ~TB_UATTR_MASK;
+    }
+#endif
 
     uint32_t cfg, cbg;
     switch (global.output_mode) {
@@ -3884,8 +3936,8 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
 
     if_err_return(rv, send_sgr(cfg, cbg, fg_is_default, bg_is_default));
 
-    global.last_fg = fg;
-    global.last_bg = bg;
+    global.last_fg = ofg;
+    global.last_bg = obg;
 
     return TB_OK;
 }
