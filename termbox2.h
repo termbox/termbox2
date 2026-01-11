@@ -246,11 +246,14 @@ extern "C" {
 /* END codegen h */
 
 /* Some hard-coded caps */
-#define TB_HARDCAP_ENTER_MOUSE  "\x1b[?1000h\x1b[?1002h\x1b[?1015h\x1b[?1006h"
-#define TB_HARDCAP_EXIT_MOUSE   "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
-#define TB_HARDCAP_STRIKEOUT    "\x1b[9m"
-#define TB_HARDCAP_UNDERLINE_2  "\x1b[21m"
-#define TB_HARDCAP_OVERLINE     "\x1b[53m"
+#define TB_HARDCAP_ENTER_MOUSE      "\x1b[?1000h\x1b[?1002h\x1b[?1015h\x1b[?1006h"
+#define TB_HARDCAP_EXIT_MOUSE       "\x1b[?1006l\x1b[?1015l\x1b[?1002l\x1b[?1000l"
+#define TB_HARDCAP_STRIKEOUT        "\x1b[9m"
+#define TB_HARDCAP_UNDERLINE_2      "\x1b[21m"
+#define TB_HARDCAP_OVERLINE         "\x1b[53m"
+#define TB_HARDCAP_UNDERLINE_CURLY  "\x1b[4:3m"
+#define TB_HARDCAP_UNDERLINE_DOTTED "\x1b[4:4m"
+#define TB_HARDCAP_UNDERLINE_DASHED "\x1b[4:5m"
 
 /* Colors (numeric) and attributes (bitwise) (`tb_cell.fg`, `tb_cell.bg`) */
 #define TB_DEFAULT              0x0000
@@ -292,10 +295,14 @@ extern "C" {
 #endif
 
 #if TB_OPT_ATTR_W == 64
-#define TB_STRIKEOUT   0x0000000100000000
-#define TB_UNDERLINE_2 0x0000000200000000
-#define TB_OVERLINE    0x0000000400000000
-#define TB_INVISIBLE   0x0000000800000000
+#define TB_STRIKEOUT        0x0000000100000000
+#define TB_UNDERLINE_2      0x0000000200000000
+#define TB_OVERLINE         0x0000000400000000
+#define TB_INVISIBLE        0x0000000800000000
+#define TB_UNDERLINE_DOUBLY TB_UNDERLINE_2
+#define TB_UNDERLINE_CURLY  0x0000001000000000
+#define TB_UNDERLINE_DOTTED 0x0000002000000000
+#define TB_UNDERLINE_DASHED 0x0000004000000000
 #endif
 
 /* Event types (`tb_event.type`) */
@@ -575,7 +582,8 @@ int tb_set_input_mode(int mode);
  *
  *    The following style attributes are also available if compiled with
  *    `TB_OPT_ATTR_W` set to 64:
- *      `TB_STRIKEOUT`, `TB_UNDERLINE_2`, `TB_OVERLINE`, `TB_INVISIBLE`
+ *      `TB_STRIKEOUT`, `TB_UNDERLINE_2`, `TB_OVERLINE`, `TB_INVISIBLE`,
+ *      `TB_UNDERLINE_CURLY`, `TB_UNDERLINE_DOTTED`, `TB_UNDERLINE_DASHED`
  *
  *    As in all modes, the value 0 is interpreted as `TB_DEFAULT` for
  *    convenience.
@@ -3863,6 +3871,15 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
     if (fg & TB_INVISIBLE)
         if_err_return(rv,
             bytebuf_puts(&global.out, global.caps[TB_CAP_INVISIBLE]));
+
+    if (fg & TB_UNDERLINE_CURLY)
+        if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_UNDERLINE_CURLY));
+
+    if (fg & TB_UNDERLINE_DOTTED)
+        if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_UNDERLINE_DOTTED));
+
+    if (fg & TB_UNDERLINE_DASHED)
+        if_err_return(rv, bytebuf_puts(&global.out, TB_HARDCAP_UNDERLINE_DASHED));
 #endif
 
     if ((fg & TB_REVERSE) || (bg & TB_REVERSE))
