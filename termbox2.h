@@ -90,7 +90,7 @@ extern "C" {
  *                      `setlocale(3)` `LC_CTYPE` to UTF-8. Defaults to
  *                      built-in.
  *
- *  `TB_OPT_TRUECOLOR`: Deprecated. Sets TB_OPT_ATTR_W to 32 if not already
+ *  `TB_OPT_TRUECOLOR`: Deprecated. Sets `TB_OPT_ATTR_W` to 32 if not already
  *                      set.
  */
 
@@ -2459,8 +2459,8 @@ int tb_present(void) {
                     // than 1, thereby skipping some cells. Set these skipped
                     // cells to an invalid codepoint in the front buffer, so
                     // that if this cell is later replaced by a wcwidth==1
-                    // char we'll get a cell_cmp diff for the skipped cells and
-                    // properly re-render.
+                    // char, we'll get a cell_cmp diff for the skipped cells
+                    // and properly re-render.
                     for (i = 1; i < w; i++) {
                         struct tb_cell *front_wide;
                         uint32_t invalid = -1;
