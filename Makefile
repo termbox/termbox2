@@ -3,6 +3,7 @@ prefix?=/usr/local
 termbox_cflags:=-std=c99 -Wall -Wextra -pedantic -Wno-unused-result -g -O0 -D_XOPEN_SOURCE -D_DEFAULT_SOURCE $(CFLAGS)
 termbox_demos:=demo/keyboard
 termbox_h:=termbox2.h
+termbox_h_in:=termbox2.h.in
 termbox_h_lib:=termbox2.h.lib
 termbox_ffi_h:=termbox2.ffi.h
 termbox_ffi_macro:=termbox2.ffi.macro
@@ -24,7 +25,10 @@ ifeq ($(shell $(CC) -dumpmachine | grep -q apple && echo 1), 1)
     termbox_ld_soname:=install_name
 endif
 
-all: $(termbox_demos) $(termbox_so) $(termbox_so_x) $(termbox_a)
+all: $(termbox_h) $(termbox_demos) $(termbox_so) $(termbox_so_x) $(termbox_a)
+
+$(termbox_h): $(termbox_h_in) tb_api.h tb_platform.h termbox2.c tb_posix.c tb_wasm.c assemble.awk
+	awk -f assemble.awk $(termbox_h_in) > $@
 
 $(termbox_demos): %: %.c
 	$(CC) -DTB_IMPL -DTB_LIB_OPTS -I. $(termbox_cflags) $^ -o $@
@@ -54,8 +58,8 @@ $(termbox_h_lib): $(termbox_h)
 	sed 's|0 // __tb_lib_opts|1 // __tb_lib_opts|' $(termbox_h) >$@
 
 terminfo:
-	awk -vg=0 'g==0{print} /BEGIN codegen h/{g=1; system("./codegen.sh h")} /END codegen h/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
-	awk -vg=0 'g==0{print} /BEGIN codegen c/{g=1; system("./codegen.sh c")} /END codegen c/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
+	awk -vg=0 'g==0{print} /BEGIN codegen h/{g=1; system("./codegen.sh h")} /END codegen h/{g=0; print} g==1{next}' tb_api.h >tb_api.h.tmp && mv -vf tb_api.h.tmp tb_api.h
+	awk -vg=0 'g==0{print} /BEGIN codegen c/{g=1; system("./codegen.sh c")} /END codegen c/{g=0; print} g==1{next}' tb_api.h >tb_api.h.tmp && mv -vf tb_api.h.tmp tb_api.h
 
 format:
 	clang-format -i termbox2.h
@@ -98,6 +102,6 @@ install_so: $(termbox_so_x_y_z)
 	ln -sf $(termbox_so_x_y_z) $(DESTDIR)$(prefix)/lib/$(termbox_so)
 
 clean:
-	rm -f $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x) $(termbox_so_x_y_z) $(termbox_ffi_h) $(termbox_ffi_macro) $(termbox_h_lib) tests/**/observed.ansi
+	rm -f $(termbox_h) $(termbox_demos) $(termbox_o) $(termbox_a) $(termbox_so) $(termbox_so_x) $(termbox_so_x_y_z) $(termbox_ffi_h) $(termbox_ffi_macro) $(termbox_h_lib) tests/**/observed.ansi
 
 .PHONY: all lib terminfo format test test_local install install_lib install_h install_h_lib install_a install_so clean

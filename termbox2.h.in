@@ -1,0 +1,110 @@
+/*
+MIT License
+
+Copyright (c) 2015-2026 Adam Saponara <as@php.net>
+              2010-2020 nsf <no.smile.face@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
+
+/* The following compile-time options are supported:
+ *
+ *     `TB_OPT_ATTR_W`: Integer width of `fg` and `bg` attributes. Valid values
+ *                      (assuming system support) are 16, 32, and 64. (See
+ *                      `uintattr_t`). 32 or 64 enables output mode
+ *                      `TB_OUTPUT_TRUECOLOR`. 64 enables additional style
+ *                      attributes. (See `tb_set_output_mode`.) Larger values
+ *                      consume more memory in exchange for more features.
+ *                      Defaults to 16.
+ *
+ *        `TB_OPT_EGC`: If set, enable extended grapheme cluster support
+ *                      (`tb_extend_cell`, `tb_set_cell_ex`). Consumes more
+ *                      memory. Defaults off.
+ *
+ * `TB_OPT_PRINTF_BUF`: Write buffer size for printf operations. Represents the
+ *                      largest string that can be sent in one call to
+ *                      `tb_print*` and `tb_send*` functions. Defaults to 4096.
+ *
+ *   `TB_OPT_READ_BUF`: Read buffer size for tty reads. Defaults to 64.
+ *
+ * `TB_OPT_LIBC_WCHAR`: If set, use libc's `wcwidth(3)`, `iswprint(3)`, etc
+ *                      instead of the built-in Unicode-aware versions. Note,
+ *                      libc's are locale-dependent and the caller must
+ *                      `setlocale(3)` `LC_CTYPE` to UTF-8. Defaults to
+ *                      built-in.
+ *
+ *  `TB_OPT_TRUECOLOR`: Deprecated. Sets `TB_OPT_ATTR_W` to 32 if not already
+ *                      set.
+ */
+
+#ifndef TERMBOX_H_INCL
+#define TERMBOX_H_INCL
+
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE
+#endif
+
+#ifndef _DEFAULT_SOURCE
+#define _DEFAULT_SOURCE
+#endif
+
+/* Universal headers */
+#include <errno.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// __ffi_start
+
+/* BEGIN header tb_api.h */
+/* END header tb_api.h */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // TERMBOX_H_INCL
+
+#ifdef TB_IMPL
+
+/* BEGIN header tb_platform.h */
+/* END header tb_platform.h */
+
+/* BEGIN core */
+/* END core */
+
+#ifdef TB_PLATFORM_POSIX
+/* BEGIN platform posix */
+/* END platform posix */
+#endif
+
+#ifdef TB_PLATFORM_WASM
+/* BEGIN platform wasm */
+/* END platform wasm */
+#endif
+
+#endif // TB_IMPL
