@@ -1157,8 +1157,7 @@ void  tb_platform_shutdown(void *platform);
 
 /* Terminal setup */
 int tb_platform_enter_raw(void *platform);
-int tb_platform_init_resize(void *platform);
-int tb_platform_init_caps(void *platform);
+int tb_platform_init(void *platform);
 
 /* I/O */
 int tb_platform_write(void *platform, const char *buf, size_t len);
@@ -2382,9 +2381,8 @@ static int tb_init_common(void) {
 
     do {
         if_err_break(rv, tb_platform_enter_raw(global.platform));
-        if_err_break(rv, tb_platform_init_caps(global.platform));
+        if_err_break(rv, tb_platform_init(global.platform));
         if_err_break(rv, init_cap_trie());
-        if_err_break(rv, tb_platform_init_resize(global.platform));
         if_err_break(rv, send_init_escape_codes());
         if_err_break(rv, send_clear());
         int w, h;
@@ -4049,31 +4047,6 @@ int tb_platform_read(void *platform, char *buf, size_t len,
     return TB_OK;
 }
 
-static void tb_platform_handle_resize(int sig) {
-    int errno_copy = errno;
-    struct tb_posix *p = global.platform;
-    write(p->resize_pipefd[1], &sig, sizeof(sig));
-    errno = errno_copy;
-}
-
-int tb_platform_init_resize(void *platform) {
-    struct tb_posix *p = platform;
-    if (pipe(p->resize_pipefd) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_PIPE;
-    }
-
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = tb_platform_handle_resize;
-    if (sigaction(SIGWINCH, &sa, NULL) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_SIGACTION;
-    }
-
-    return TB_OK;
-}
-
 int tb_platform_wait(void *platform, int timeout_ms, int *has_input,
         int *has_resize) {
     struct tb_posix *p = platform;
@@ -4391,8 +4364,29 @@ static int load_builtin_caps(void) {
     return TB_ERR_UNSUPPORTED_TERM;
 }
 
-int tb_platform_init_caps(void *platform) {
+static void tb_platform_handle_resize(int sig) {
+    int errno_copy = errno;
+    struct tb_posix *p = global.platform;
+    write(p->resize_pipefd[1], &sig, sizeof(sig));
+    errno = errno_copy;
+}
+
+int tb_platform_init(void *platform) {
     struct tb_posix *p = platform;
+
+    if (pipe(p->resize_pipefd) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_PIPE;
+    }
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = tb_platform_handle_resize;
+    if (sigaction(SIGWINCH, &sa, NULL) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_SIGACTION;
+    }
+
     if (load_terminfo(p) == TB_OK) {
         return parse_terminfo_caps(p);
     }
@@ -4481,8 +4475,12 @@ int tb_platform_read(void *platform, char *buf, size_t len,
     return TB_OK;
 }
 
-int tb_platform_init_resize(void *platform) {
+int tb_platform_init(void *platform) {
     (void)platform;
+    int j;
+    for (j = 0; j < TB_CAP__COUNT; j++) {
+        global.caps[j] = builtin_terms[0].caps[j];
+    }
     return TB_OK;
 }
 
@@ -4512,15 +4510,6 @@ int tb_platform_drain_resize(void *platform) {
 int tb_platform_term_size(void *platform, int *w, int *h) {
     (void)platform;
     __tb_host_get_size(w, h);
-    return TB_OK;
-}
-
-int tb_platform_init_caps(void *platform) {
-    (void)platform;
-    int j;
-    for (j = 0; j < TB_CAP__COUNT; j++) {
-        global.caps[j] = builtin_terms[0].caps[j];
-    }
     return TB_OK;
 }
 

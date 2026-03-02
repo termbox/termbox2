@@ -123,31 +123,6 @@ int tb_platform_read(void *platform, char *buf, size_t len,
     return TB_OK;
 }
 
-static void tb_platform_handle_resize(int sig) {
-    int errno_copy = errno;
-    struct tb_posix *p = global.platform;
-    write(p->resize_pipefd[1], &sig, sizeof(sig));
-    errno = errno_copy;
-}
-
-int tb_platform_init_resize(void *platform) {
-    struct tb_posix *p = platform;
-    if (pipe(p->resize_pipefd) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_PIPE;
-    }
-
-    struct sigaction sa;
-    memset(&sa, 0, sizeof(sa));
-    sa.sa_handler = tb_platform_handle_resize;
-    if (sigaction(SIGWINCH, &sa, NULL) != 0) {
-        global.last_errno = errno;
-        return TB_ERR_RESIZE_SIGACTION;
-    }
-
-    return TB_OK;
-}
-
 int tb_platform_wait(void *platform, int timeout_ms, int *has_input,
         int *has_resize) {
     struct tb_posix *p = platform;
@@ -465,8 +440,29 @@ static int load_builtin_caps(void) {
     return TB_ERR_UNSUPPORTED_TERM;
 }
 
-int tb_platform_init_caps(void *platform) {
+static void tb_platform_handle_resize(int sig) {
+    int errno_copy = errno;
+    struct tb_posix *p = global.platform;
+    write(p->resize_pipefd[1], &sig, sizeof(sig));
+    errno = errno_copy;
+}
+
+int tb_platform_init(void *platform) {
     struct tb_posix *p = platform;
+
+    if (pipe(p->resize_pipefd) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_PIPE;
+    }
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = tb_platform_handle_resize;
+    if (sigaction(SIGWINCH, &sa, NULL) != 0) {
+        global.last_errno = errno;
+        return TB_ERR_RESIZE_SIGACTION;
+    }
+
     if (load_terminfo(p) == TB_OK) {
         return parse_terminfo_caps(p);
     }

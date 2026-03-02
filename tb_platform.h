@@ -20,8 +20,7 @@ void  tb_platform_shutdown(void *platform);
 
 /* Terminal setup */
 int tb_platform_enter_raw(void *platform);
-int tb_platform_init_resize(void *platform);
-int tb_platform_init_caps(void *platform);
+int tb_platform_init(void *platform);
 
 /* I/O */
 int tb_platform_write(void *platform, const char *buf, size_t len);

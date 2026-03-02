@@ -61,8 +61,12 @@ int tb_platform_read(void *platform, char *buf, size_t len,
     return TB_OK;
 }
 
-int tb_platform_init_resize(void *platform) {
+int tb_platform_init(void *platform) {
     (void)platform;
+    int j;
+    for (j = 0; j < TB_CAP__COUNT; j++) {
+        global.caps[j] = builtin_terms[0].caps[j];
+    }
     return TB_OK;
 }
 
@@ -92,15 +96,6 @@ int tb_platform_drain_resize(void *platform) {
 int tb_platform_term_size(void *platform, int *w, int *h) {
     (void)platform;
     __tb_host_get_size(w, h);
-    return TB_OK;
-}
-
-int tb_platform_init_caps(void *platform) {
-    (void)platform;
-    int j;
-    for (j = 0; j < TB_CAP__COUNT; j++) {
-        global.caps[j] = builtin_terms[0].caps[j];
-    }
     return TB_OK;
 }
 

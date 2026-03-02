@@ -1210,9 +1210,8 @@ static int tb_init_common(void) {
 
     do {
         if_err_break(rv, tb_platform_enter_raw(global.platform));
-        if_err_break(rv, tb_platform_init_caps(global.platform));
+        if_err_break(rv, tb_platform_init(global.platform));
         if_err_break(rv, init_cap_trie());
-        if_err_break(rv, tb_platform_init_resize(global.platform));
         if_err_break(rv, send_init_escape_codes());
         if_err_break(rv, send_clear());
         int w, h;
