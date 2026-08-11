@@ -2719,6 +2719,7 @@ int tb_printf_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
 }
 
 int tb_send(const char *buf, size_t nbuf) {
+    if_not_init_return();
     return bytebuf_nputs(&global.out, buf, nbuf);
 }
 
