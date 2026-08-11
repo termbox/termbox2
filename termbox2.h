@@ -3304,7 +3304,7 @@ static int read_terminfo_path(const char *path) {
     }
 
     size_t fsize = st.st_size;
-    char *data = (char *)tb_malloc(fsize);
+    char *data = (char *)tb_malloc(fsize + 1);
     if (!data) {
         fclose(fp);
         return TB_ERR;
@@ -3315,6 +3315,7 @@ static int read_terminfo_path(const char *path) {
         tb_free(data);
         return TB_ERR;
     }
+    data[fsize] = '\0';
 
     global.terminfo = data;
     global.nterminfo = fsize;
