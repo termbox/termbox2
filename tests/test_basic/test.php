@@ -38,8 +38,11 @@ $test->ffi->tb_printf_ex(0, $y++, $blue, $bg, FFI::addr($out_w), "event rv=%d ty
     $event->x,
     $event->y
 );
-
 $test->ffi->tb_printf(0, $y++, 0, 0, "out_w=%d", $out_w->cdata);
+
+// `\xcc\x81` is width==0; should not error in non-egc mode
+$rv = $test->ffi->tb_print_ex(0, $y, 0, 0, FFI::addr($out_w), "de\xcc\x81f");
+$num = $test->ffi->tb_printf(0, $y, 0, 0, "def rv=%d out_w=%d", $rv, $out_w->cdata);
 
 $test->ffi->tb_present();
 

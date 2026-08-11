@@ -673,6 +673,10 @@ int tb_get_fds(int *ttyfd, int *resizefd);
 /* Print and printf functions. Specify param `out_w` to determine width of
  * printed string. Strings are interpreted as UTF-8.
  *
+ * No attempt is made to do proper grapheme cluster parsing. With `TB_OPT_EGC`
+ * enabled, as a very coarse approximation, codepoints of `width==0` are tacked
+ * on to the previous codepoint via `tb_extend_cell`.
+ *
  * Non-printable characters (`iswprint(3)`) and truncated UTF-8 byte sequences
  * are replaced with U+FFFD.
  *
@@ -2671,10 +2675,14 @@ int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
 
         if (w < 0) {
             return TB_ERR;   // shouldn't happen if iswprint
-        } else if (w == 0) { // combining character
+        } else if (w == 0) { // combining character? TODO: UAX-29
+#ifdef TB_OPT_EGC
             if (cellbuf_in_bounds(&global.back, x_prev, y)) {
                 if_err_return(rv, tb_extend_cell(x_prev, y, uni));
             }
+#else
+            (void)x_prev;
+#endif
         } else {
             if (cellbuf_in_bounds(&global.back, x, y)) {
                 if_err_return(rv, tb_set_cell(x, y, uni, fg, bg));
