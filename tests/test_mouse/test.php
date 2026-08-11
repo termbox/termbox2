@@ -101,7 +101,9 @@ foreach (['vt200', '1006', '1015'] as $mode) {
                         $fttyin_write($esc_byte, $rewind_stream);
 
                         FFI::memset(FFI::addr($event), 0, FFI::sizeof($event));
+                        $test->ffi->quiet(true);
                         $rv = $test->ffi->tb_peek_event(FFI::addr($event), 1000);
+                        $test->ffi->quiet(false);
 
                         $result = sprintf(
                             '%20s %-5s %-7s %-5s %-6s %-7s %-9s rv=%-2d %-9s type=%-6s mod=%-6s key=%-10s',
