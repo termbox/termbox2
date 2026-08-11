@@ -2435,6 +2435,8 @@ int tb_present(void) {
                 if (back->nech > 0)
                     w = tb_cluster_width(back->ech, back->nech);
                 else
+#else
+                (void)tb_cluster_width;
 #endif
                     w = tb_wcwidth((wchar_t)back->ch);
             }
