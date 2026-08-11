@@ -2363,7 +2363,7 @@ int tb_init_rwfd(int rfd, int wfd) {
     int rv;
 
     tb_reset();
-    global.ttyfd = isatty(rfd) ? rfd : (isatty(wfd) ? wfd : -1);
+    global.ttyfd = isatty(rfd) ? rfd : (wfd != rfd && isatty(wfd) ? wfd : -1);
     global.rfd = rfd;
     global.wfd = wfd;
 
@@ -3189,14 +3189,12 @@ static int tb_deinit(void) {
         bytebuf_puts(&global.out, TB_HARDCAP_EXIT_MOUSE);
         bytebuf_flush(&global.out, global.wfd);
     }
-    if (global.ttyfd >= 0) {
-        if (global.has_orig_tios) {
-            tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
-        }
-        if (global.ttyfd_open) {
-            close(global.ttyfd);
-            global.ttyfd_open = 0;
-        }
+    if (global.has_orig_tios && global.ttyfd >= 0) {
+        tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
+    }
+    if (global.ttyfd_open) {
+        close(global.ttyfd >= 0 ? global.ttyfd : global.rfd);
+        global.ttyfd_open = 0;
     }
 
     struct sigaction sa;
