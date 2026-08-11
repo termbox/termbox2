@@ -4177,7 +4177,11 @@ static int cellbuf_resize(struct cellbuf *c, int w, int h) {
         }
     }
 
-    tb_free(prev);
+    struct cellbuf prevbuf = {0};
+    prevbuf.width = ow;
+    prevbuf.height = oh;
+    prevbuf.cells = prev;
+    cellbuf_free(&prevbuf);
 
     return TB_OK;
 }
