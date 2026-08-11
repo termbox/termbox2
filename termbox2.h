@@ -4038,7 +4038,7 @@ static int cell_cmp(struct tb_cell *a, struct tb_cell *b) {
     if (a->nech != b->nech) {
         return 1;
     } else if (a->nech > 0) { // a->nech == b->nech
-        return memcmp(a->ech, b->ech, a->nech);
+        return memcmp(a->ech, b->ech, a->nech * sizeof(*a->ech));
     }
 #endif
     return 0;

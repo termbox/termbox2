@@ -35,5 +35,16 @@ $test->ffi->tb_extend_cell(0, $y, 0x036f); // combining latin small letter x
 ++$y;
 $test->ffi->tb_print(0, $y, 0, 0, "\xef\xbc\xa9\xcc\xa4\xcd\xaf");
 
+// Ensure cell_cmp applies to entire egc
+++$y;
+$ech[0] = ord('e');
+$ech[1] = 0x0301;
+$test->ffi->tb_set_cell_ex(0, $y, $test->ffi->cast('uint32_t *', FFI::addr($ech)), 2, 0, 0);
+$test->ffi->tb_present();
+$ech[0] = ord('e');
+$ech[1] = 0x0302; // diff on 2nd byte; should overwrite
+$test->ffi->tb_set_cell_ex(0, $y, $test->ffi->cast('uint32_t *', FFI::addr($ech)), 2, 0, 0);
+$test->ffi->tb_present();
+
 $test->ffi->tb_present();
 $test->screencap();
