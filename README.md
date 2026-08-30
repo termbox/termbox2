@@ -105,7 +105,7 @@ directory. (Feel free to submit PRs for other languages.)
 * [Rust](demo/example.rs)
 * [Zig](demo/example.zig)
 
-Other wrapper libraries:
+Other wrapper libraries or implementations:
 
 * [cl-termbox2 (Common Lisp)](https://github.com/garlic0x1/cl-termbox2)
 * [termbox2.cr (Crystal)](https://github.com/homonoidian/termbox2.cr)
@@ -115,6 +115,7 @@ Other wrapper libraries:
 * [termbox2-node (JavaScript)](https://github.com/RauliL/termbox2-node)
 * [letloop's termbox2 (Chez Scheme)](https://github.com/letloop/letloop/)
 * [odin-termbox2 (Odin)](https://github.com/sudokit/odin-termbox2)
+* [mbox from mhl (C++)](https://github.com/mint-tube/mhl/blob/master/include/mbox.hpp)
 
 ### Using termbox2 with other libraries
 
