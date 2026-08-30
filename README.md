@@ -113,18 +113,22 @@ Other wrapper libraries or implementations:
 * [termbox2-hs (Haskell)](https://github.com/gatlin/termbox2-hs)
 * [termbox2-zig (Zig)](https://sr.ht/~kolunmi/termbox2-zig)
 * [termbox2-node (JavaScript)](https://github.com/RauliL/termbox2-node)
-* [letloop's termbox2 (Chez Scheme)](https://github.com/letloop/letloop/)
+* [letloop's termbox2 (Chez Scheme)](https://github.com/amirouche/letloop)
 * [odin-termbox2 (Odin)](https://github.com/sudokit/odin-termbox2)
 * [mbox from mhl (C++)](https://github.com/mint-tube/mhl/blob/master/include/mbox.hpp)
+* [raku-termbox2 (Raku)](https://github.com/arnesom/raku-termbox2)
+* [mruby-termbox2 (Ruby)](https://github.com/AlexB52/mruby-termbox2)
 
 ### Using termbox2 with other libraries
 
 termbox2 does not contain TUI elements/widgets like input fields, checkboxes,
 scoll bars, etc. These are too complex and opinionated and better off handled
-by a separate library. Here are some widget examples built on top of termbox2:
+by a separate library. Below are some higher level UIs built on top of
+termbox2:
 
 * [readline](demo/readline.c) - if all you need is a text input
 * [termbox-widgets](https://github.com/git-bruh/termbox-widgets)
+* [libterm](https://github.com/rizukirr/libterm) - termbox2-compatible
 
 termbox2 also does not contain a layout engine for the same reason. However,
 there is at least one layout engine with termbox2 support:
