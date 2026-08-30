@@ -108,7 +108,6 @@ directory. (Feel free to submit PRs for other languages.)
 Other wrapper libraries:
 
 * [cl-termbox2 (Common Lisp)](https://github.com/garlic0x1/cl-termbox2)
-* [termbox.cr (Crystal)](https://github.com/thmisch/termbox.cr)
 * [termbox2.cr (Crystal)](https://github.com/homonoidian/termbox2.cr)
 * [Termbox.pm (Perl)](https://github.com/sanko/Termbox.pm)
 * [termbox2-hs (Haskell)](https://github.com/gatlin/termbox2-hs)
@@ -142,7 +141,6 @@ there is at least one layout engine with termbox2 support:
 * [Vgmi](https://github.com/RealMelkor/Vgmi) - Gemini client
 * [poe](https://sr.ht/~strahinja/poe/) - `.po` file editor
 * [xtxf](https://github.com/charlesrocket/xtxf) - 2D matrix screensaver
-* [chatty](https://git.spacehb.net/chatty) - chat application
 * [ly](https://codeberg.org/fairyglade/ly) - TUI display manager for Linux and BSD
 * [kew](https://codeberg.org/ravachol/kew) - terminal music player
 
