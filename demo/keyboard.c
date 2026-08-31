@@ -633,7 +633,7 @@ int counter = 0;
 
 void pretty_print_mouse(struct tb_event *ev) {
     printf_tb(3, 19, TB_WHITE, TB_DEFAULT, "Mouse event: %d x %d %c", ev->x, ev->y, (ev->mod & TB_MOD_MOTION) ? '*' : ' ');
-    char *btn = "";
+    const char *btn = "";
     switch (ev->key) {
     case TB_KEY_MOUSE_LEFT:
         btn = "MouseLeft: %d";
