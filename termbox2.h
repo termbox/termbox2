@@ -392,6 +392,13 @@ extern "C" {
 #define tb_free    free
 #endif
 
+/* Define this to swap in a different function for computing cluster width. */
+#ifdef tb_cluster_width
+#define TB_CUSTOM_CLUSTER_WIDTH 1
+#else
+#define tb_cluster_width tb_cluster_width_approx
+#endif
+
 #if TB_OPT_ATTR_W == 64
 typedef uint64_t uintattr_t;
 #elif TB_OPT_ATTR_W == 32
@@ -2338,7 +2345,9 @@ static int bytebuf_flush(struct bytebuf *b, int fd);
 static int bytebuf_reserve(struct bytebuf *b, size_t sz);
 static int bytebuf_free(struct bytebuf *b);
 static int tb_iswprint_ex(uint32_t ch, int *width);
-static int tb_cluster_width(uint32_t *ch, size_t nch);
+#ifndef TB_CUSTOM_CLUSTER_WIDTH
+static int tb_cluster_width_approx(uint32_t *ch, size_t nch);
+#endif
 
 int tb_init(void) {
     return tb_init_file("/dev/tty");
@@ -4265,7 +4274,8 @@ int tb_wcwidth(uint32_t ch) {
     return w;
 }
 
-static int tb_cluster_width(uint32_t *ch, size_t nch) {
+#ifndef TB_CUSTOM_CLUSTER_WIDTH
+static int tb_cluster_width_approx(uint32_t *ch, size_t nch) {
     int wmax = -1;
     int vs15 = 0, vs16 = 0, ri = 0, zwj = 0;
     size_t i = 0;
@@ -4286,6 +4296,7 @@ static int tb_cluster_width(uint32_t *ch, size_t nch) {
     }
     return wmax;
 }
+#endif
 
 static int tb_iswprint_ex(uint32_t ch, int *w) {
 #ifdef TB_OPT_LIBC_WCHAR
