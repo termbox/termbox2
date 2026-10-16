@@ -632,7 +632,12 @@ void pretty_print_resize(struct tb_event *ev)
 int counter = 0;
 
 void pretty_print_mouse(struct tb_event *ev) {
-    printf_tb(3, 19, TB_WHITE, TB_DEFAULT, "Mouse event: %d x %d %c", ev->x, ev->y, (ev->mod & TB_MOD_MOTION) ? '*' : ' ');
+    printf_tb(3, 19, TB_WHITE, TB_DEFAULT, "Mouse event: %d x %d", ev->x, ev->y);
+    printf_tb(46, 18, TB_WHITE, TB_DEFAULT, "Modifier: %c%c%c%c",
+            (ev->mod & TB_MOD_CTRL)   ? 'C' : ' ',
+            (ev->mod & TB_MOD_ALT)    ? 'A' : ' ',
+            (ev->mod & TB_MOD_SHIFT)  ? 'S' : ' ',
+            (ev->mod & TB_MOD_MOTION) ? 'M' : ' ');
     const char *btn = "";
     switch (ev->key) {
     case TB_KEY_MOUSE_LEFT:
@@ -654,8 +659,8 @@ void pretty_print_mouse(struct tb_event *ev) {
         btn = "MouseRelease: %d";
     }
     counter++;
-    printf_tb(43, 19, TB_WHITE, TB_DEFAULT, "Key: ");
-    printf_tb(48, 19, TB_YELLOW, TB_DEFAULT, btn, counter);
+    printf_tb(46, 19, TB_WHITE, TB_DEFAULT, "Key: ");
+    printf_tb(51, 19, TB_YELLOW, TB_DEFAULT, btn, counter);
 }
 
 void dispatch_press(struct tb_event *ev)
