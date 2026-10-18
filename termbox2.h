@@ -443,11 +443,12 @@ struct tb_cell {
  *    when `TB_EVENT_KEY`: `key` xor `ch` (one will be zero) and `mod`. Note
  *                         there is overlap between `TB_MOD_CTRL` and
  *                         `TB_KEY_CTRL_*`. `TB_MOD_CTRL` and `TB_MOD_SHIFT`
- *                         are only set as modifiers to `TB_KEY_ARROW_*`.
+ *                         are only set as modifiers to `TB_KEY_ARROW_*` and
+ *                         `TB_KEY_MOUSE_*`.
  *
  * when `TB_EVENT_RESIZE`: `w` and `h`
  *
- *  when `TB_EVENT_MOUSE`: `key` (`TB_KEY_MOUSE_*`), `x`, and `y`
+ *  when `TB_EVENT_MOUSE`: `key` (`TB_KEY_MOUSE_*`), `x`, `y`, and `mod`
  */
 struct tb_event {
     uint8_t type; // one of `TB_EVENT_*` constants
@@ -2310,6 +2311,7 @@ static int extract_esc(struct tb_event *event);
 static int extract_esc_user(struct tb_event *event, int is_post);
 static int extract_esc_cap(struct tb_event *event);
 static int extract_esc_mouse(struct tb_event *event);
+static void extract_esc_mouse_key_mod(struct tb_event *event, int b);
 static int resize_cellbufs(void);
 static void handle_resize(int sig);
 static int send_attr(uintattr_t fg, uintattr_t bg);
@@ -3659,26 +3661,8 @@ static int extract_esc_mouse(struct tb_event *event) {
 
             int b = in->buf[3] - 0x20;
 
-            switch (b & 3) {
-                case 0:
-                    event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
-                                                 : TB_KEY_MOUSE_LEFT;
-                    break;
-                case 1:
-                    event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
-                                                 : TB_KEY_MOUSE_MIDDLE;
-                    break;
-                case 2:
-                    event->key = TB_KEY_MOUSE_RIGHT;
-                    break;
-                case 3:
-                    event->key = TB_KEY_MOUSE_RELEASE;
-                    break;
-                default:
-                    return TB_ERR;
-            }
-
-            if ((b & 32) != 0) event->mod |= TB_MOD_MOTION;
+            // extract mouse keys and modifiers
+            extract_esc_mouse_key_mod(event, b);
 
             // the coord is 1,1 for upper left
             event->x = ((uint8_t)in->buf[4]) - 0x21;
@@ -3734,29 +3718,11 @@ static int extract_esc_mouse(struct tb_event *event) {
 
             if (type == TYPE_1015) num[0] -= 0x20;
 
-            switch (num[0] & 3) {
-                case 0:
-                    event->key = ((num[0] & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
-                                                      : TB_KEY_MOUSE_LEFT;
-                    break;
-                case 1:
-                    event->key = ((num[0] & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
-                                                      : TB_KEY_MOUSE_MIDDLE;
-                    break;
-                case 2:
-                    event->key = TB_KEY_MOUSE_RIGHT;
-                    break;
-                case 3:
-                    event->key = TB_KEY_MOUSE_RELEASE;
-                    break;
-                default:
-                    return TB_ERR;
-            }
+            // extract mouse keys and modifiers
+            extract_esc_mouse_key_mod(event, num[0]);
 
             // on xterm mouse release is signaled by lowercase m
             if (trail == 'm') event->key = TB_KEY_MOUSE_RELEASE;
-
-            if ((num[0] & 32) != 0) event->mod |= TB_MOD_MOTION;
 
             event->x = (num[1] - 1 < 0) ? 0 : num[1] - 1;
             event->y = (num[2] - 1 < 0) ? 0 : num[2] - 1;
@@ -3770,6 +3736,31 @@ static int extract_esc_mouse(struct tb_event *event) {
     event->type = TB_EVENT_MOUSE;
 
     return TB_OK;
+}
+
+static void extract_esc_mouse_key_mod(struct tb_event *event, int b) {
+    switch (b & 3) {
+        case 0:
+            event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
+                                         : TB_KEY_MOUSE_LEFT;
+            break;
+        case 1:
+            event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
+                                         : TB_KEY_MOUSE_MIDDLE;
+            break;
+        case 2:
+            event->key = TB_KEY_MOUSE_RIGHT;
+            break;
+        case 3:
+            event->key = TB_KEY_MOUSE_RELEASE;
+            break;
+    }
+
+    event->mod |=
+          ((b & 0x04) >> 0)  // TB_MOD_SHIFT
+        | ((b & 0x08) >> 3)  // TB_MOD_ALT
+        | ((b & 0x10) >> 3)  // TB_MOD_CTRL
+        | ((b & 0x20) >> 2); // TB_MOD_MOTION
 }
 
 static int resize_cellbufs(void) {

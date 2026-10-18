@@ -21,7 +21,7 @@ $fttyin_write = function ($s, $rewind = false) use (&$fttyin, &$fttyin_nbytes) {
     }
 };
 
-$key2str = function($key) use ($test) {
+$key2str = function ($key) use ($test) {
     return match ($key) {
         $test->defines['TB_KEY_MOUSE_LEFT']       => 'left',
         $test->defines['TB_KEY_MOUSE_RIGHT']      => 'right',
@@ -33,7 +33,16 @@ $key2str = function($key) use ($test) {
     };
 };
 
-$esc2str = function($str) {
+$mod2str = function ($mod) use ($test) {
+    return implode('', [
+        $mod & $test->defines['TB_MOD_CTRL']   ? 'C' : '-',
+        $mod & $test->defines['TB_MOD_ALT']    ? 'A' : '-',
+        $mod & $test->defines['TB_MOD_SHIFT']  ? 'S' : '-',
+        $mod & $test->defines['TB_MOD_MOTION'] ? 'M' : '-',
+    ]);
+};
+
+$esc2str = function ($str) {
     return preg_replace_callback(
         '/[^\x21-\x7e]/',
         fn ($m) => sprintf('<%s>', dechex(ord($m[0]))),
@@ -57,72 +66,92 @@ foreach (['vt200', '1006', '1015'] as $mode) {
     foreach (['left', 'middle', 'right', 'release'] as $action) {
         foreach ([false, true] as $wheel) {
             foreach ([false, true] as $motion) {
-                foreach ($coords as $coord) {
-                    list ($x, $y) = $coord;
+                foreach ([false, true] as $mod_alt) {
+                    foreach ([false, true] as $mod_ctrl) {
+                        foreach ([false, true] as $mod_shift) {
+                            foreach ($coords as $coord) {
+                                list ($x, $y) = $coord;
 
-                    if ($wheel && !in_array($action, ['left', 'middle'])) {
-                        continue;
-                    } else if ($mode === 'vt200' && ($x > 0xff || $y > 0xff)) {
-                        continue;
-                    }
+                                if ($wheel && !in_array($action, ['left', 'middle'])) {
+                                    continue;
+                                } else if ($mode === 'vt200' && ($x > 0xff || $y > 0xff)) {
+                                    continue;
+                                } else if ($mode === 'vt200' && ($mod_alt || $mod_ctrl || $mod_shift)) {
+                                    continue;
+                                }
 
-                    $b = 0;
-                    $b |= match ($action) {
-                        'left'    => 0b00,
-                        'middle'  => 0b01,
-                        'right'   => 0b10,
-                        'release' => 0b11,
-                    };
-                    if ($wheel) {
-                        $b |= 0x40;
-                    }
-                    if ($motion) {
-                        $b |= 0x20;
-                    }
-                    if ($mode !== '1006') {
-                        $b += 0x20;
-                    }
-                    $esc = match ($mode) {
-                        'vt200' => sprintf("\x1b[M%s%s%s", chr($b), chr(0x21 + $x), chr(0x21 + $y)),
-                        '1006'  => sprintf("\x1b[<%d;%d;%d%s", $b, $x + 1, $y + 1, $action === 'release' ? 'm' : 'M'),
-                        '1015'  => sprintf("\x1b[%d;%d;%dM", $b, $x + 1 , $y + 1),
-                    };
+                                $b = 0;
+                                $b |= match ($action) {
+                                    'left'    => 0b00,
+                                    'middle'  => 0b01,
+                                    'right'   => 0b10,
+                                    'release' => 0b11,
+                                };
+                                if ($mod_shift) {
+                                    $b |= 0x04;
+                                }
+                                if ($mod_alt) {
+                                    $b |= 0x08;
+                                }
+                                if ($mod_ctrl) {
+                                    $b |= 0x10;
+                                }
+                                if ($motion) {
+                                    $b |= 0x20;
+                                }
+                                if ($wheel) {
+                                    $b |= 0x40;
+                                }
+                                if ($mode !== '1006') {
+                                    $b += 0x20;
+                                }
+                                $esc = match ($mode) {
+                                    'vt200' => sprintf("\x1b[M%s%s%s", chr($b), chr(0x21 + $x), chr(0x21 + $y)),
+                                    '1006'  => sprintf("\x1b[<%d;%d;%d%s", $b, $x + 1, $y + 1, $action === 'release' ? 'm' : 'M'),
+                                    '1015'  => sprintf("\x1b[%d;%d;%dM", $b, $x + 1 , $y + 1),
+                                };
 
-                    $esc_len = strlen($esc);
-                    $esc_so_far = '';
+                                $esc_len = strlen($esc);
+                                $esc_so_far = '';
 
-                    for ($i = 0; $i < $esc_len; $i++) {
-                        $esc_byte = substr($esc, $i, 1);
-                        $esc_so_far .= $esc_byte;
+                                for ($i = 0; $i < $esc_len; $i++) {
+                                    $esc_byte = substr($esc, $i, 1);
+                                    $esc_so_far .= $esc_byte;
 
-                        $is_full = $i === $esc_len - 1;
-                        $rewind_stream = $is_full;
+                                    $is_full = $i === $esc_len - 1;
+                                    $rewind_stream = $is_full;
 
-                        $fttyin_write($esc_byte, $rewind_stream);
+                                    $fttyin_write($esc_byte, $rewind_stream);
 
-                        FFI::memset(FFI::addr($event), 0, FFI::sizeof($event));
-                        $test->ffi->quiet(true);
-                        $rv = $test->ffi->tb_peek_event(FFI::addr($event), 1000);
-                        $test->ffi->quiet(false);
+                                    FFI::memset(FFI::addr($event), 0, FFI::sizeof($event));
+                                    $test->ffi->quiet(true);
+                                    $rv = $test->ffi->tb_peek_event(FFI::addr($event), 1000);
+                                    $test->ffi->quiet(false);
 
-                        $result = sprintf(
-                            '%20s %-5s %-7s %-5s %-6s %-7s %-9s rv=%-2d %-9s type=%-6s mod=%-6s key=%-10s',
-                            $esc2str($esc_so_far),
-                            $mode,
-                            $action,
-                            $wheel ? 'wheel' : '-',
-                            $motion ? 'motion' : '-',
-                            $is_full ? 'full' : '-',
-                            "$x,$y",
-                            $rv,
-                            "{$event->x},{$event->y}",
-                            ($event->type & $test->defines['TB_EVENT_MOUSE']) ? 'mouse' : "{$event->type}",
-                            ($event->mod & $test->defines['TB_MOD_MOTION']) ? 'motion' : "{$event->mod}",
-                            $key2str($event->key),
-                        );
+                                    $result = sprintf(
+                                        '%20s %-5s %-7s %-5s [%s%s%s%s] %-7s %-9s => rv=%-2d %-9s type=%-6s mod=%-6s key=%-10s',
+                                        $esc2str($esc_so_far),
+                                        $mode,
+                                        $action,
+                                        $wheel ? 'wheel' : '-',
+                                        $mod_ctrl ? 'C' : '-',
+                                        $mod_alt ? 'A' : '-',
+                                        $mod_shift ? 'S' : '-',
+                                        $motion ? 'M' : '-',
+                                        $is_full ? 'full' : '-',
+                                        "$x,$y",
+                                        $rv,
+                                        "{$event->x},{$event->y}",
+                                        ($event->type & $test->defines['TB_EVENT_MOUSE']) ? 'mouse' : "{$event->type}",
+                                        $mod2str($event->mod),
+                                        $key2str($event->key),
+                                    );
 
-                        fwrite(STDERR, "{$result}\n");
-                        $results[] = $result;
+                                    fwrite(STDERR, "{$result}\n");
+                                    $results[] = $result;
+                                }
+                            }
+                        }
                     }
                 }
             }
