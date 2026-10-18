@@ -600,8 +600,15 @@ const char *funckeymap(int k)
     return "UNKNOWN";
 }
 
-void pretty_print_press(struct tb_event *ev)
-{
+void pretty_print_mods(struct tb_event *ev) {
+    printf_tb(54, 18, TB_WHITE, TB_DEFAULT, "Modifier: %c%c%c%c",
+        (ev->mod & TB_MOD_CTRL)   ? 'C' : ' ',
+        (ev->mod & TB_MOD_ALT)    ? 'A' : ' ',
+        (ev->mod & TB_MOD_SHIFT)  ? 'S' : ' ',
+        (ev->mod & TB_MOD_MOTION) ? 'M' : ' ');
+}
+
+void pretty_print_press(struct tb_event *ev) {
     char buf[7];
     buf[tb_utf8_unicode_to_char(buf, ev->ch)] = '\0';
     printf_tb(3, 19, TB_WHITE , TB_DEFAULT, "Key: ");
@@ -616,12 +623,7 @@ void pretty_print_press(struct tb_event *ev)
     printf_tb(60, 21, TB_CYAN  , TB_DEFAULT, "octal:   0%o", ev->ch);
     printf_tb(60, 22, TB_RED   , TB_DEFAULT, "string:  %s", buf);
 
-    printf_tb(54, 18, TB_WHITE, TB_DEFAULT, "Modifier: %c%c%c%c",
-            (ev->mod & TB_MOD_CTRL)   ? 'C' : ' ',
-            (ev->mod & TB_MOD_ALT)    ? 'A' : ' ',
-            (ev->mod & TB_MOD_SHIFT)  ? 'S' : ' ',
-            (ev->mod & TB_MOD_MOTION) ? 'M' : ' ');
-
+    pretty_print_mods(ev);
 }
 
 void pretty_print_resize(struct tb_event *ev)
@@ -766,6 +768,7 @@ int main(int argc, char **argv)
             tb_clear();
             draw_keyboard();
             pretty_print_mouse(&ev);
+            pretty_print_mods(&ev);
             tb_present();
             break;
         default:
