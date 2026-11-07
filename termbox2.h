@@ -342,6 +342,7 @@ extern "C" {
 #define TB_ERR_RESIZE_READ      -20
 #define TB_ERR_RESIZE_SSCANF    -21
 #define TB_ERR_CAP_COLLISION    -22
+#define TB_ERR_INIT_INVALID_OPT -23
 
 #define TB_ERR_SELECT           TB_ERR_POLL
 #define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
@@ -443,12 +444,26 @@ struct tb_event {
     int32_t y;    // mouse y
 };
 
+/* Initialization options. New fields must only be appended to preserve ABI
+ * compatibility. `size` must be initialized to the size of the caller's
+ * structure; `tb_init_ex` reads only fields fully covered by `size`.
+ */
+struct tb_init_opts {
+    size_t size;
+    const char *file; // tty path; NULL selects /dev/tty
+};
+
+#define TB_INIT_DEFAULT_OPTS (struct tb_init_opts){.size = sizeof(struct tb_init_opts)}
+
 /* Initialize the termbox library. This function should be called before any
  * other functions. `tb_init` is equivalent to `tb_init_file("/dev/tty")`.
+ * `tb_init_ex` accepts an extensible options structure; fields beyond the
+ * supplied `size` are treated as unset. `size` must include the `size` field.
  * After successful initialization, the library must be finalized using
  * `tb_shutdown`.
  */
 int tb_init(void);
+int tb_init_ex(const struct tb_init_opts *opts);
 int tb_init_file(const char *path);
 int tb_init_fd(int ttyfd);
 int tb_init_rwfd(int rfd, int wfd);
@@ -2296,6 +2311,20 @@ int tb_init(void) {
     return tb_init_file("/dev/tty");
 }
 
+int tb_init_ex(const struct tb_init_opts *opts) {
+    if (global.initialized) return TB_ERR_INIT_ALREADY;
+    if (!opts || opts->size < sizeof(opts->size))
+        return TB_ERR_INIT_INVALID_OPT;
+
+    const char *file = NULL;
+    if (opts->size >= offsetof(struct tb_init_opts, file) +
+                      sizeof(opts->file)) {
+        file = opts->file;
+    }
+
+    return tb_init_file(file ? file : "/dev/tty");
+}
+
 int tb_init_file(const char *path) {
     if (global.initialized) return TB_ERR_INIT_ALREADY;
     int ttyfd = open(path, O_RDWR);
@@ -2771,6 +2800,8 @@ const char *tb_strerror(int err) {
             return "Unsupported terminal";
         case TB_ERR_CAP_COLLISION:
             return "Termcaps collision";
+        case TB_ERR_INIT_INVALID_OPT:
+            return "Invalid initialization options";
         case TB_ERR_RESIZE_SSCANF:
             return "Terminal width/height not received by sscanf() after "
                    "resize";
