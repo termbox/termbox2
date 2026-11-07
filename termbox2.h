@@ -62,7 +62,7 @@ extern "C" {
 
 // __ffi_start
 
-#define TB_VERSION_STR "2.7.0"
+#define TB_VERSION_STR "3.0.0-dev"
 
 /* The following compile-time options are supported:
  *
@@ -89,9 +89,6 @@ extern "C" {
  *                      libc's are locale-dependent and the caller must
  *                      `setlocale(3)` `LC_CTYPE` to UTF-8. Defaults to
  *                      built-in.
- *
- *  `TB_OPT_TRUECOLOR`: Deprecated. Sets `TB_OPT_ATTR_W` to 32 if not already
- *                      set.
  */
 
 #if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
@@ -111,11 +108,7 @@ extern "C" {
 #elif defined TB_OPT_ATTR_W && TB_OPT_ATTR_W == 64
 #else
 #undef TB_OPT_ATTR_W
-#if defined TB_OPT_TRUECOLOR // Deprecated. Back-compat for old flag.
-#define TB_OPT_ATTR_W 32
-#else
 #define TB_OPT_ATTR_W 16
-#endif
 #endif
 
 /* Include wchar if opting libc */
@@ -274,7 +267,6 @@ extern "C" {
 #define TB_HI_BLACK  0x2000
 #define TB_BRIGHT    0x4000
 #define TB_DIM       0x8000
-#define TB_256_BLACK TB_HI_BLACK // `TB_256_BLACK` is deprecated
 #else
 // `TB_OPT_ATTR_W` is 32 or 64
 #define TB_BOLD                0x01000000
@@ -285,12 +277,6 @@ extern "C" {
 #define TB_HI_BLACK            0x20000000
 #define TB_BRIGHT              0x40000000
 #define TB_DIM                 0x80000000
-#define TB_TRUECOLOR_BOLD      TB_BOLD // `TB_TRUECOLOR_*` is deprecated
-#define TB_TRUECOLOR_UNDERLINE TB_UNDERLINE
-#define TB_TRUECOLOR_REVERSE   TB_REVERSE
-#define TB_TRUECOLOR_ITALIC    TB_ITALIC
-#define TB_TRUECOLOR_BLINK     TB_BLINK
-#define TB_TRUECOLOR_BLACK     TB_HI_BLACK
 #endif
 
 #if TB_OPT_ATTR_W == 64
@@ -359,10 +345,6 @@ extern "C" {
 
 #define TB_ERR_SELECT           TB_ERR_POLL
 #define TB_ERR_RESIZE_SELECT    TB_ERR_RESIZE_POLL
-
-/* Deprecated. Function types to be used with `tb_set_func`. */
-#define TB_FUNC_EXTRACT_PRE     0
-#define TB_FUNC_EXTRACT_POST    1
 
 /* Define this to set the size of the buffer used in `tb_printf` and
  * `tb_sendf`.
@@ -701,19 +683,6 @@ int tb_printf_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
 int tb_send(const char *buf, size_t nbuf);
 int tb_sendf(const char *fmt, ...);
 
-/* Deprecated. Set custom callbacks. `fn_type` is one of `TB_FUNC_*` constants,
- * `fn` is a compatible function pointer, or NULL to clear.
- *
- * `TB_FUNC_EXTRACT_PRE`:
- *   If specified, invoke this function BEFORE termbox tries to extract any
- *   escape sequences from the input buffer.
- *
- * `TB_FUNC_EXTRACT_POST`:
- *   If specified, invoke this function AFTER termbox tries (and fails) to
- *   extract any escape sequences from the input buffer.
- */
-int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *));
-
 /* Return byte length of codepoint given first byte of UTF-8 sequence (1-6). */
 int tb_utf8_char_length(char c);
 
@@ -738,31 +707,12 @@ int tb_utf8_unicode_to_char(char *out, uint32_t c);
 /* Library utility functions */
 int tb_last_errno(void);
 const char *tb_strerror(int err);
-struct tb_cell *tb_cell_buffer(void); // Deprecated
 int tb_has_truecolor(void);
 int tb_has_egc(void);
 int tb_attr_width(void);
 const char *tb_version(void);
 int tb_iswprint(uint32_t ch);
 int tb_wcwidth(uint32_t ch);
-
-/* Deprecation notice!
- *
- * The following will be removed in version 3.x (ABI version 3):
- *
- *   `TB_256_BLACK`           (use `TB_HI_BLACK`)
- *   `TB_OPT_TRUECOLOR`       (use `TB_OPT_ATTR_W`)
- *   `TB_TRUECOLOR_BOLD`      (use `TB_BOLD`)
- *   `TB_TRUECOLOR_UNDERLINE` (use `TB_UNDERLINE`)
- *   `TB_TRUECOLOR_REVERSE`   (use `TB_REVERSE`)
- *   `TB_TRUECOLOR_ITALIC`    (use `TB_ITALIC`)
- *   `TB_TRUECOLOR_BLINK`     (use `TB_BLINK`)
- *   `TB_TRUECOLOR_BLACK`     (use `TB_HI_BLACK`)
- *   `tb_cell_buffer`
- *   `tb_set_func`
- *   `TB_FUNC_EXTRACT_PRE`
- *   `TB_FUNC_EXTRACT_POST`
- */
 
 #ifdef __cplusplus
 }
@@ -2736,23 +2686,6 @@ int tb_sendf(const char *fmt, ...) {
         return TB_ERR;
     }
     return tb_send(buf, (size_t)rv);
-}
-
-int tb_set_func(int fn_type, int (*fn)(struct tb_event *, size_t *)) {
-    switch (fn_type) {
-        case TB_FUNC_EXTRACT_PRE:
-            global.fn_extract_esc_pre = fn;
-            return TB_OK;
-        case TB_FUNC_EXTRACT_POST:
-            global.fn_extract_esc_post = fn;
-            return TB_OK;
-    }
-    return TB_ERR;
-}
-
-struct tb_cell *tb_cell_buffer(void) {
-    if (!global.initialized) return NULL;
-    return global.back.cells;
 }
 
 int tb_utf8_char_length(char c) {
