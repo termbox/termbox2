@@ -269,14 +269,14 @@ extern "C" {
 #define TB_DIM       0x8000
 #else
 // `TB_OPT_ATTR_W` is 32 or 64
-#define TB_BOLD                0x01000000
-#define TB_UNDERLINE           0x02000000
-#define TB_REVERSE             0x04000000
-#define TB_ITALIC              0x08000000
-#define TB_BLINK               0x10000000
-#define TB_HI_BLACK            0x20000000
-#define TB_BRIGHT              0x40000000
-#define TB_DIM                 0x80000000
+#define TB_BOLD      0x01000000
+#define TB_UNDERLINE 0x02000000
+#define TB_REVERSE   0x04000000
+#define TB_ITALIC    0x08000000
+#define TB_BLINK     0x10000000
+#define TB_HI_BLACK  0x20000000
+#define TB_BRIGHT    0x40000000
+#define TB_DIM       0x80000000
 #endif
 
 #if TB_OPT_ATTR_W == 64
@@ -673,7 +673,8 @@ int tb_get_fds(int *ttyfd, int *resizefd);
  * For finer control, use `tb_set_cell`.
  */
 int tb_print(int x, int y, uintattr_t fg, uintattr_t bg, const char *str);
-int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt, ...);
+int tb_printf(int x, int y, uintattr_t fg, uintattr_t bg, const char *fmt,
+    ...);
 int tb_print_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
     const char *str);
 int tb_printf_ex(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
@@ -2252,8 +2253,8 @@ static int load_terminfo_from_path(const char *path, const char *term);
 static int read_terminfo_path(const char *path);
 static int parse_terminfo_caps(void);
 static int load_builtin_caps(void);
-static const char *get_terminfo_string(int16_t offsets_pos, int16_t offsets_len,
-    int16_t table_pos, int16_t table_size, int16_t index);
+static const char *get_terminfo_string(int16_t offsets_pos,
+    int16_t offsets_len, int16_t table_pos, int16_t table_size, int16_t index);
 static int get_terminfo_int16(int offset, int16_t *val);
 static int wait_event(struct tb_event *event, int timeout);
 static int extract_event(struct tb_event *event);
@@ -2550,8 +2551,7 @@ int tb_set_input_mode(int mode) {
 int tb_set_output_mode(int mode) {
     if_not_init_return();
     switch (mode) {
-        case TB_OUTPUT_CURRENT:
-            return global.output_mode;
+        case TB_OUTPUT_CURRENT: return global.output_mode;
         case TB_OUTPUT_NORMAL:
         case TB_OUTPUT_256:
         case TB_OUTPUT_216:
@@ -2682,9 +2682,7 @@ int tb_sendf(const char *fmt, ...) {
     va_start(vl, fmt);
     rv = vsnprintf(buf, sizeof(buf), fmt, vl);
     va_end(vl);
-    if (rv < 0 || rv >= (int)sizeof(buf)) {
-        return TB_ERR;
-    }
+    if (rv < 0 || rv >= (int)sizeof(buf)) { return TB_ERR; }
     return tb_send(buf, (size_t)rv);
 }
 
@@ -2751,26 +2749,16 @@ int tb_last_errno(void) {
 
 const char *tb_strerror(int err) {
     switch (err) {
-        case TB_OK:
-            return "Success";
-        case TB_ERR_NEED_MORE:
-            return "Not enough input";
-        case TB_ERR_INIT_ALREADY:
-            return "Termbox initialized already";
-        case TB_ERR_MEM:
-            return "Out of memory";
-        case TB_ERR_NO_EVENT:
-            return "No event";
-        case TB_ERR_NO_TERM:
-            return "No TERM in environment";
-        case TB_ERR_NOT_INIT:
-            return "Termbox not initialized";
-        case TB_ERR_OUT_OF_BOUNDS:
-            return "Out of bounds";
-        case TB_ERR_UNSUPPORTED_TERM:
-            return "Unsupported terminal";
-        case TB_ERR_CAP_COLLISION:
-            return "Termcaps collision";
+        case TB_OK:                   return "Success";
+        case TB_ERR_NEED_MORE:        return "Not enough input";
+        case TB_ERR_INIT_ALREADY:     return "Termbox initialized already";
+        case TB_ERR_MEM:              return "Out of memory";
+        case TB_ERR_NO_EVENT:         return "No event";
+        case TB_ERR_NO_TERM:          return "No TERM in environment";
+        case TB_ERR_NOT_INIT:         return "Termbox not initialized";
+        case TB_ERR_OUT_OF_BOUNDS:    return "Out of bounds";
+        case TB_ERR_UNSUPPORTED_TERM: return "Unsupported terminal";
+        case TB_ERR_CAP_COLLISION:    return "Termcaps collision";
         case TB_ERR_RESIZE_SSCANF:
             return "Terminal width/height not received by sscanf() after "
                    "resize";
@@ -2787,7 +2775,8 @@ const char *tb_strerror(int err) {
         case TB_ERR_RESIZE_POLL:
         case TB_ERR_RESIZE_READ:
         default:
-            strerror_r(global.last_errno, global.errbuf, sizeof(global.errbuf));
+            strerror_r(global.last_errno, global.errbuf,
+                sizeof(global.errbuf));
             return (const char *)global.errbuf;
     }
 }
@@ -2869,16 +2858,12 @@ int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg, size_t *out_w,
     int rv;
     char buf[TB_OPT_PRINTF_BUF];
     rv = vsnprintf(buf, sizeof(buf), fmt, vl);
-    if (rv < 0 || rv >= (int)sizeof(buf)) {
-        return TB_ERR;
-    }
+    if (rv < 0 || rv >= (int)sizeof(buf)) { return TB_ERR; }
     return tb_print_ex(x, y, fg, bg, out_w, buf);
 }
 
 static int init_term_caps(void) {
-    if (load_terminfo() == TB_OK) {
-        return parse_terminfo_caps();
-    }
+    if (load_terminfo() == TB_OK) { return parse_terminfo_caps(); }
     return load_builtin_caps();
 }
 
@@ -2933,9 +2918,7 @@ static int cap_trie_add(const char *cap, uint16_t key, uint8_t mod) {
             node->nchildren += 1;
             node->children = (struct cap_trie *)tb_realloc(node->children,
                 sizeof(*node) * node->nchildren);
-            if (!node->children) {
-                return TB_ERR_MEM;
-            }
+            if (!node->children) { return TB_ERR_MEM; }
             next = &node->children[node->nchildren - 1];
             memset(next, 0, sizeof(*next));
             next->c = c;
@@ -2980,9 +2963,7 @@ static int cap_trie_find(const char *buf, size_t nbuf, struct cap_trie **last,
         node = next;
         *last = node;
         *depth += 1;
-        if (node->is_leaf && node->nchildren < 1) {
-            break;
-        }
+        if (node->is_leaf && node->nchildren < 1) { break; }
     }
     return TB_OK;
 }
@@ -3111,7 +3092,8 @@ static int update_term_size_via_esc(void) {
 static int init_cellbuf(void) {
     int rv;
     if_err_return(rv, cellbuf_init(&global.back, global.width, global.height));
-    if_err_return(rv, cellbuf_init(&global.front, global.width, global.height));
+    if_err_return(rv,
+        cellbuf_init(&global.front, global.width, global.height));
     if_err_return(rv, cellbuf_clear(&global.back));
     if_err_return(rv, cellbuf_clear(&global.front));
     return TB_OK;
@@ -3349,8 +3331,9 @@ static int load_builtin_caps(void) {
     return TB_ERR_UNSUPPORTED_TERM;
 }
 
-static const char *get_terminfo_string(int16_t offsets_pos, int16_t offsets_len,
-    int16_t table_pos, int16_t table_size, int16_t index) {
+static const char *get_terminfo_string(int16_t offsets_pos,
+    int16_t offsets_len, int16_t table_pos, int16_t table_size,
+    int16_t index) {
     if (index >= offsets_len) {
         // An index beyond the offset table indicates absent
         // See `convert_strings` in tinfo `read_entry.c`
@@ -3358,7 +3341,8 @@ static const char *get_terminfo_string(int16_t offsets_pos, int16_t offsets_len,
     }
 
     int16_t table_offset;
-    int table_offset_offset = (int)offsets_pos + (index * (int)sizeof(int16_t));
+    int table_offset_offset =
+        (int)offsets_pos + (index * (int)sizeof(int16_t));
     if (get_terminfo_int16(table_offset_offset, &table_offset) != TB_OK) {
         // offset beyond end of terminfo entry
         // Truncated/corrupt terminfo entry?
@@ -3674,26 +3658,23 @@ static int extract_esc_mouse(struct tb_event *event) {
 static void extract_esc_mouse_key_mod(struct tb_event *event, int b) {
     switch (b & 3) {
         case 0:
-            event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP
-                                         : TB_KEY_MOUSE_LEFT;
+            event->key =
+                ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_UP : TB_KEY_MOUSE_LEFT;
             break;
         case 1:
             event->key = ((b & 64) != 0) ? TB_KEY_MOUSE_WHEEL_DOWN
                                          : TB_KEY_MOUSE_MIDDLE;
             break;
-        case 2:
-            event->key = TB_KEY_MOUSE_RIGHT;
-            break;
-        case 3:
-            event->key = TB_KEY_MOUSE_RELEASE;
-            break;
+        case 2: event->key = TB_KEY_MOUSE_RIGHT; break;
+        case 3: event->key = TB_KEY_MOUSE_RELEASE; break;
     }
-
+    // clang-format off
     event->mod |=
           ((b & 0x04) >> 0)  // TB_MOD_SHIFT
         | ((b & 0x08) >> 3)  // TB_MOD_ALT
         | ((b & 0x10) >> 3)  // TB_MOD_CTRL
         | ((b & 0x20) >> 2); // TB_MOD_MOTION
+    // clang-format on
 }
 
 static int resize_cellbufs(void) {
@@ -3716,9 +3697,7 @@ static void handle_resize(int sig) {
 static int send_attr(uintattr_t fg, uintattr_t bg) {
     int rv;
 
-    if (fg == global.last_fg && bg == global.last_bg) {
-        return TB_OK;
-    }
+    if (fg == global.last_fg && bg == global.last_bg) { return TB_OK; }
 
     if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_SGR0]));
 
@@ -3773,7 +3752,8 @@ static int send_attr(uintattr_t fg, uintattr_t bg) {
         if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BOLD]));
 
     if (fg & TB_BLINK)
-        if_err_return(rv, bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
+        if_err_return(rv,
+            bytebuf_puts(&global.out, global.caps[TB_CAP_BLINK]));
 
     if (fg & TB_UNDERLINE)
         if_err_return(rv,
@@ -3831,9 +3811,7 @@ static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
     int rv;
     char nbuf[32];
 
-    if (fg_is_default && bg_is_default) {
-        return TB_OK;
-    }
+    if (fg_is_default && bg_is_default) { return TB_OK; }
 
     switch (global.output_mode) {
         default:
@@ -3841,13 +3819,9 @@ static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
             send_literal(rv, "\x1b[");
             if (!fg_is_default) {
                 send_num(rv, nbuf, cfg);
-                if (!bg_is_default) {
-                    send_literal(rv, ";");
-                }
+                if (!bg_is_default) { send_literal(rv, ";"); }
             }
-            if (!bg_is_default) {
-                send_num(rv, nbuf, cbg);
-            }
+            if (!bg_is_default) { send_num(rv, nbuf, cbg); }
             send_literal(rv, "m");
             break;
 
@@ -3858,9 +3832,7 @@ static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
             if (!fg_is_default) {
                 send_literal(rv, "38;5;");
                 send_num(rv, nbuf, cfg);
-                if (!bg_is_default) {
-                    send_literal(rv, ";");
-                }
+                if (!bg_is_default) { send_literal(rv, ";"); }
             }
             if (!bg_is_default) {
                 send_literal(rv, "48;5;");
@@ -3879,9 +3851,7 @@ static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
                 send_num(rv, nbuf, (cfg >> 8) & 0xff);
                 send_literal(rv, ";");
                 send_num(rv, nbuf, cfg & 0xff);
-                if (!bg_is_default) {
-                    send_literal(rv, ";");
-                }
+                if (!bg_is_default) { send_literal(rv, ";"); }
             }
             if (!bg_is_default) {
                 send_literal(rv, "48;2;");
@@ -3901,9 +3871,7 @@ static int send_sgr(uint32_t cfg, uint32_t cbg, int fg_is_default,
 static int send_cursor_if(int x, int y) {
     int rv;
     char nbuf[32];
-    if (x < 0 || y < 0) {
-        return TB_OK;
-    }
+    if (x < 0 || y < 0) { return TB_OK; }
     send_literal(rv, "\x1b[");
     send_num(rv, nbuf, y + 1);
     send_literal(rv, ";");
@@ -3955,9 +3923,7 @@ static int convert_num(uint32_t num, char *buf) {
 }
 
 static int cell_cmp(struct tb_cell *a, struct tb_cell *b) {
-    if (a->ch != b->ch || a->fg != b->fg || a->bg != b->bg) {
-        return 1;
-    }
+    if (a->ch != b->ch || a->fg != b->fg || a->bg != b->bg) { return 1; }
 #ifdef TB_OPT_EGC
     if (a->nech != b->nech) {
         return 1;
@@ -4034,9 +4000,7 @@ static int cellbuf_init(struct cellbuf *c, int w, int h) {
 static int cellbuf_free(struct cellbuf *c) {
     if (c->cells) {
         int i;
-        for (i = 0; i < c->width * c->height; i++) {
-            cell_free(&c->cells[i]);
-        }
+        for (i = 0; i < c->width * c->height; i++) { cell_free(&c->cells[i]); }
         tb_free(c->cells);
     }
     memset(c, 0, sizeof(*c));
@@ -4053,8 +4017,7 @@ static int cellbuf_clear(struct cellbuf *c) {
     return TB_OK;
 }
 
-static int cellbuf_get(struct cellbuf *c, int x, int y,
-    struct tb_cell **out) {
+static int cellbuf_get(struct cellbuf *c, int x, int y, struct tb_cell **out) {
     if (!cellbuf_in_bounds(c, x, y)) {
         *out = NULL;
         return TB_ERR_OUT_OF_BOUNDS;
@@ -4064,9 +4027,7 @@ static int cellbuf_get(struct cellbuf *c, int x, int y,
 }
 
 static int cellbuf_in_bounds(struct cellbuf *c, int x, int y) {
-    if (x < 0 || x >= c->width || y < 0 || y >= c->height) {
-        return 0;
-    }
+    if (x < 0 || x >= c->width || y < 0 || y >= c->height) { return 0; }
     return 1;
 }
 
@@ -4076,9 +4037,7 @@ static int cellbuf_resize(struct cellbuf *c, int w, int h) {
     int ow = c->width;
     int oh = c->height;
 
-    if (ow == w && oh == h) {
-        return TB_OK;
-    }
+    if (ow == w && oh == h) { return TB_OK; }
 
     w = w < 1 ? 1 : w;
     h = h < 1 ? 1 : h;
@@ -4148,9 +4107,7 @@ static int bytebuf_reserve(struct bytebuf *b, size_t sz) {
     if (b->cap >= sz) return TB_OK;
 
     size_t newcap = b->cap > 0 ? b->cap : 1;
-    while (newcap < sz) {
-        newcap *= 2;
-    }
+    while (newcap < sz) { newcap *= 2; }
 
     char *newbuf;
     if (b->buf) {
@@ -4193,6 +4150,7 @@ static int tb_cluster_width(uint32_t *ch, size_t nch) {
     int wmax = -1;
     int vs15 = 0, vs16 = 0, ri = 0, zwj = 0;
     size_t i = 0;
+    // clang-format off
     for (i = 0; i < nch; i++) {
         uint32_t c = ch[i];
         switch (c) {
@@ -4208,6 +4166,7 @@ static int tb_cluster_width(uint32_t *ch, size_t nch) {
         if (vs15) return 1;
         else if (vs16 || zwj || ri >= 2) return 2;
     }
+    // clang-format on
     return wmax;
 }
 
