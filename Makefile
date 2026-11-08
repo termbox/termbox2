@@ -54,8 +54,11 @@ $(termbox_h_lib): $(termbox_h)
 	sed 's|0 // __tb_lib_opts|1 // __tb_lib_opts|' $(termbox_h) >$@
 
 terminfo:
-	awk -vg=0 'g==0{print} /BEGIN codegen h/{g=1; system("./codegen.sh h")} /END codegen h/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
-	awk -vg=0 'g==0{print} /BEGIN codegen c/{g=1; system("./codegen.sh c")} /END codegen c/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
+	awk -vg=0 'g==0{print} /BEGIN codegen h/{g=1; system("./codegen.php h")} /END codegen h/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
+	awk -vg=0 'g==0{print} /BEGIN codegen c/{g=1; system("./codegen.php c")} /END codegen c/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
+
+wcwidth:
+	awk -vg=0 'g==0{print} /BEGIN codegen w/{g=1; system("./codegen.php w")} /END codegen w/{g=0; print} g==1{next}' termbox2.h >termbox2.h.tmp && mv -vf termbox2.h.tmp termbox2.h
 
 format:
 	clang-format -i termbox2.h
