@@ -33,11 +33,13 @@ SOFTWARE.
 #define _DEFAULT_SOURCE
 #endif
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,12 +52,6 @@ SOFTWARE.
 #include <termios.h>
 #include <unistd.h>
 
-#ifdef PATH_MAX
-#define TB_PATH_MAX PATH_MAX
-#else
-#define TB_PATH_MAX 4096
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -66,29 +62,36 @@ extern "C" {
 
 /* The following compile-time options are supported:
  *
- *     `TB_OPT_ATTR_W`: Integer width of `fg` and `bg` attributes. Valid values
- *                      (assuming system support) are 16, 32, and 64. (See
- *                      `uintattr_t`). 32 or 64 enables output mode
- *                      `TB_OUTPUT_TRUECOLOR`. 64 enables additional style
- *                      attributes. (See `tb_set_output_mode`.) Larger values
- *                      consume more memory in exchange for more features.
- *                      Defaults to 16.
+ * - `TB_OPT_ATTR_W`
+ *   Integer width of `fg` and `bg` attributes. Valid values (assuming system
+ *   support) are 16, 32, and 64. (See `uintattr_t`). 32 or 64 enables output
+ *   mode `TB_OUTPUT_TRUECOLOR`. 64 enables additional style attributes. (See
+ *   `tb_set_output_mode`.) Larger values consume more memory in exchange for
+ *   more features. Defaults to 16.
  *
- *        `TB_OPT_EGC`: If set, enable extended grapheme cluster support
- *                      (`tb_extend_cell`, `tb_set_cell_ex`). Consumes more
- *                      memory. Defaults off.
+ * - `TB_OPT_EGC`
+ *   If set, enable extended grapheme cluster support (`tb_extend_cell`,
+ *   `tb_set_cell_ex`). Consumes more memory. Defaults off.
  *
- * `TB_OPT_PRINTF_BUF`: Write buffer size for printf operations. Represents the
- *                      largest string that can be sent in one call to
- *                      `tb_print*` and `tb_send*` functions. Defaults to 4096.
+ * - `TB_OPT_PRINTF_BUF`
+ *   Write buffer size for printf operations. Represents the largest string
+ *   that can be sent in one call to `tb_print*` and `tb_send*` functions.
+ *   Defaults to 4096.
  *
- *   `TB_OPT_READ_BUF`: Read buffer size for tty reads. Defaults to 64.
+ * - `TB_OPT_READ_BUF`
+ *   Read buffer size for tty reads. Defaults to 64.
  *
- * `TB_OPT_LIBC_WCHAR`: If set, use libc's `wcwidth(3)`, `iswprint(3)`, etc
- *                      instead of the built-in Unicode-aware versions. Note,
- *                      libc's are locale-dependent and the caller must
- *                      `setlocale(3)` `LC_CTYPE` to UTF-8. Defaults to
- *                      built-in.
+ * - `TB_OPT_LIBC_WCHAR`
+ *   If set, use libc's `wcwidth(3)`, `iswprint(3)`, etc instead of the
+ *   built-in Unicode-aware versions. Note, libc's are locale-dependent and
+ *   the caller must `setlocale(3)` `LC_CTYPE` to UTF-8. Defaults to built-in.
+ *
+ * - `TB_OPT_SKIP_INIT_OPTS_CHECK`
+ *   If set, skip statically asserting no trailing padding bytes at the end of
+ *   the `tb_init_opts` struct, which could harm ABI compat logic in
+ *   `tb_init_ex` when termbox is used as a shared library. In other cases
+ *   (using termbox as a compiled-in header library, or not using `tb_init_ex`)
+ *   this check has no utility. Defaults to performing the assertion.
  */
 
 #if defined(TB_LIB_OPTS) || 0 // __tb_lib_opts
@@ -98,6 +101,7 @@ extern "C" {
 #undef TB_OPT_PRINTF_BUF
 #undef TB_OPT_READ_BUF
 #undef TB_OPT_LIBC_WCHAR
+#undef TB_OPT_SKIP_INIT_OPTS_CHECK
 #define TB_OPT_ATTR_W 64
 #define TB_OPT_EGC
 #endif
@@ -115,6 +119,13 @@ extern "C" {
 #ifdef TB_OPT_LIBC_WCHAR
 #include <wchar.h>
 #include <wctype.h>
+#endif
+
+/* Set `TB_PATH_MAX` */
+#ifdef PATH_MAX
+#define TB_PATH_MAX PATH_MAX
+#else
+#define TB_PATH_MAX 4096
 #endif
 
 /* ASCII key constants (`tb_event.key`) */
@@ -443,6 +454,72 @@ struct tb_event {
     int32_t y;    // mouse y
 };
 
+/* Library init options for use with `tb_init_ex`.
+ *
+ * - `size`
+ *   Set to `sizeof(struct tb_init_opts)`. Aids in ABI compat when termbox
+ *   is used as a shared library.
+ *
+ * - `ttypath`
+ *   If not NULL, use tty at this path (like `tb_init_file`). The caller owns
+ *   the string memory, and the library reads it during `tb_init_ex`. If the
+ *   file is not a tty, termbox will continue on and skip tty-specific
+ *   operations.
+ *
+ * - `ttyfd`
+ *   If >= 0, use tty at this fd (like `tb_init_fd`). If the fd is not a tty,
+ *   termbox will continue on and skip tty-specific operations. Takes
+ *   precedence over `ttypath`.
+ *
+ * - `rfd`, `wfd`
+ *   If >= 0, read from and write to these fds (like `tb_init_rwfd`). These
+ *   fields must be set together. They are otherwise ignored. Termbox checks if
+ *   `rfd` is a tty, then `wfd`. If neither are ttys, termbox will continue on
+ *   and skip tty-specific operations. Takes precedence over `ttyfd` and
+ *   `ttypath`.
+ *
+ * - `reserved`
+ *   Ignored. Must be the last field in the struct. Prevents padding bytes on
+ *   many systems.
+ *
+ * Initialize this struct with the macro `TB_INIT_OPTS_DEFAULT` for safe
+ * defaults.
+ */
+struct tb_init_opts {
+    size_t size;
+    const char *ttypath;
+    int ttyfd;
+    int rfd, wfd;
+    uintmax_t reserved;
+};
+
+/* A macro containing defaults for `tb_init_opts`. Intended as an initializer:
+ *
+ *   ```c
+ *   struct tb_init_opts o = TB_INIT_OPTS_DEFAULT;
+ *   o.ttyfd = ...;
+ *   tb_init_ex(&o);
+ *   ```
+ */
+#define TB_INIT_OPTS_DEFAULT                                                  \
+    {sizeof(struct tb_init_opts), NULL, -1, -1, -1, 0}
+
+#ifndef TB_FFI_GEN
+#ifndef TB_OPT_SKIP_INIT_OPTS_CHECK
+/* Assert no padding bytes at the end of the `tb_init_opts` struct. This is to
+ * catch potential ABI compat issues with `tb_init_ex` when using termbox as a
+ * shared library.
+ */
+// clang-format off
+typedef char tb_assert_init_opts[(
+       offsetof(struct tb_init_opts, reserved)
+    +  sizeof(((struct tb_init_opts *)0)->reserved)
+    == sizeof(struct tb_init_opts)
+) ? 1 : -1];
+// clang-format on
+#endif
+#endif
+
 /* Initialize the termbox library. This function should be called before any
  * other functions. `tb_init` is equivalent to `tb_init_file("/dev/tty")`.
  * After successful initialization, the library must be finalized using
@@ -452,6 +529,7 @@ int tb_init(void);
 int tb_init_file(const char *path);
 int tb_init_fd(int ttyfd);
 int tb_init_rwfd(int rfd, int wfd);
+int tb_init_ex(const struct tb_init_opts *o);
 int tb_shutdown(void);
 
 /* Return the size of the internal back buffer (which is the same as terminal's
@@ -747,6 +825,9 @@ int tb_wcwidth(uint32_t ch);
 
 #define if_not_init_return()                                                  \
     if (!global.initialized) return TB_ERR_NOT_INIT
+
+#define tb_has_init_opts_field(o, f)                                          \
+    (o)->size >= (offsetof(struct tb_init_opts, f) + sizeof((o)->f))
 
 struct bytebuf {
     char *buf;
@@ -2242,6 +2323,7 @@ static struct {
 static int tb_reset(void);
 static int tb_printf_inner(int x, int y, uintattr_t fg, uintattr_t bg,
     size_t *out_w, const char *fmt, va_list vl);
+static int init_fds(const struct tb_init_opts *o);
 static int init_term_attrs(void);
 static int init_term_caps(void);
 static int init_cap_trie(void);
@@ -2306,14 +2388,9 @@ int tb_init(void) {
 }
 
 int tb_init_file(const char *path) {
-    if (global.initialized) return TB_ERR_INIT_ALREADY;
-    int ttyfd = open(path, O_RDWR);
-    if (ttyfd < 0) {
-        global.last_errno = errno;
-        return TB_ERR_INIT_OPEN;
-    }
-    global.ttyfd_open = 1;
-    return tb_init_fd(ttyfd);
+    struct tb_init_opts o = TB_INIT_OPTS_DEFAULT;
+    o.ttypath = path;
+    return tb_init_ex(&o);
 }
 
 int tb_init_fd(int ttyfd) {
@@ -2321,14 +2398,20 @@ int tb_init_fd(int ttyfd) {
 }
 
 int tb_init_rwfd(int rfd, int wfd) {
-    int rv;
+    struct tb_init_opts o = TB_INIT_OPTS_DEFAULT;
+    o.rfd = rfd;
+    o.wfd = wfd;
+    return tb_init_ex(&o);
+}
+
+int tb_init_ex(const struct tb_init_opts *o) {
+    if (global.initialized) return TB_ERR_INIT_ALREADY;
 
     tb_reset();
-    global.ttyfd = isatty(rfd) ? rfd : (wfd != rfd && isatty(wfd) ? wfd : -1);
-    global.rfd = rfd;
-    global.wfd = wfd;
 
+    int rv;
     do {
+        if_err_break(rv, init_fds(o));
         if_err_break(rv, init_term_attrs());
         if_err_break(rv, init_term_caps());
         if_err_break(rv, init_cap_trie());
@@ -2837,6 +2920,30 @@ static int tb_reset(void) {
     return TB_OK;
 }
 
+static int init_fds(const struct tb_init_opts *o) {
+    int rfd, wfd;
+    if (o->rfd >= 0 && o->wfd >= 0) {
+        rfd = o->rfd;
+        wfd = o->wfd;
+    } else if (o->ttyfd >= 0) {
+        rfd = o->ttyfd;
+        wfd = o->ttyfd;
+    } else {
+        int ttyfd = open(o->ttypath ? o->ttypath : "/dev/tty", O_RDWR);
+        if (ttyfd < 0) {
+            global.last_errno = errno;
+            return TB_ERR_INIT_OPEN;
+        }
+        global.ttyfd_open = 1;
+        rfd = ttyfd;
+        wfd = ttyfd;
+    }
+    global.ttyfd = isatty(rfd) ? rfd : (wfd != rfd && isatty(wfd) ? wfd : -1);
+    global.rfd = rfd;
+    global.wfd = wfd;
+    return TB_OK;
+}
+
 static int init_term_attrs(void) {
     if (global.ttyfd < 0) return TB_OK;
 
@@ -3121,7 +3228,7 @@ static int tb_deinit(void) {
         tcsetattr(global.ttyfd, TCSAFLUSH, &global.orig_tios);
     }
     if (global.ttyfd_open) {
-        close(global.ttyfd >= 0 ? global.ttyfd : global.rfd);
+        close(global.rfd);
         global.ttyfd_open = 0;
     }
 
