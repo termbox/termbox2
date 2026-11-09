@@ -42,7 +42,9 @@ return (function() {
     }
 
     // Make FFI
-    $termbox_ffi_h_data = file_get_contents($termbox_ffi_h);
+    $termbox_ffi_h_data = '';
+    $termbox_ffi_h_data .= "typedef uint64_t uintmax_t;\n";
+    $termbox_ffi_h_data .= file_get_contents($termbox_ffi_h);
     $ffi = FFI::cdef($termbox_ffi_h_data, $libtermbox_so);
 
     return [ $ffi, $defines ];
